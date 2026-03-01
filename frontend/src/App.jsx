@@ -1,15 +1,18 @@
+import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import Home from './pages/Home';
 
-function App() {
+import Home from './pages/Home';
+import RegisterPage from './pages/RegisterPage';
+
+const App = () => {
   return (
     <Router>
       <Routes>
         <Route path="/" element={<Home />} />
-        {/* Коли створимо Dashboard для диплому, додамо його сюди */}
+        <Route path="/register" element={<RegisterPage />} />
       </Routes>
     </Router>
   );
-}
+};
 
 export default App;
