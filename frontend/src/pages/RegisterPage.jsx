@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react'; // Додали useState
 import { Link } from 'react-router-dom';
 import logoImg from '../assets/logo-mini.png';
 import triplyTitleImg from '../assets/main-triply.png';
@@ -7,6 +7,43 @@ import luggageImg from '../assets/travel-luggage.png';
 import ticketImg from '../assets/plane-ticket.png';
 
 const RegisterPage = () => {
+  // 1. Створюємо стан для форми
+  const [formData, setFormData] = useState({
+    first_name: '',
+    last_name: '',
+    email: '',
+    password: ''
+  });
+
+  // 2. Функція для оновлення полів
+  const handleChange = (e) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  // 3. Функція відправки даних на бекенд
+  const handleRegister = async (e) => {
+    e.preventDefault();
+    try {
+      const response = await fetch('http://127.0.0.1:8000/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        alert("Успіх! Користувач збережений в базі.");
+        console.log(data);
+      } else {
+        alert("Помилка: " + data.detail);
+      }
+    } catch (error) {
+      console.error("Помилка зв'язку з сервером:", error);
+      alert("Сервер не відповідає!");
+    }
+  };
+
   return (
     <div className="min-h-screen bg-white flex items-center justify-center p-8 relative overflow-hidden" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif' }}>
       
@@ -19,24 +56,9 @@ const RegisterPage = () => {
         
         <div className="flex justify-center items-end w-full">
           <div className="relative w-full max-w-[600px]"> 
-            
-            <img 
-              src={trioImg} 
-              alt="Triply Steps" 
-              className="w-full object-contain z-10 mix-blend-multiply" 
-            />
-            
-            <img 
-              src={luggageImg} 
-              alt="Luggage" 
-              className="absolute top-[12%] -left-8 w-28 md:w-36 -rotate-12 z-20 drop-shadow-xl" 
-            />
-            
-            <img 
-              src={ticketImg} 
-              alt="Ticket" 
-              className="absolute -top-4 -right-2 w-24 md:w-32 rotate-[35deg] z-20 drop-shadow-xl" 
-            />
+            <img src={trioImg} alt="Triply Steps" className="w-full object-contain z-10 mix-blend-multiply" />
+            <img src={luggageImg} alt="Luggage" className="absolute top-[12%] -left-8 w-28 md:w-36 -rotate-12 z-20 drop-shadow-xl" />
+            <img src={ticketImg} alt="Ticket" className="absolute -top-4 -right-2 w-24 md:w-32 rotate-[35deg] z-20 drop-shadow-xl" />
           </div>
         </div>
 
@@ -47,30 +69,46 @@ const RegisterPage = () => {
             <p className="text-gray-800 font-medium text-lg mb-8 text-center font-bold">Приєднуйтесь до Triply вже зараз!</p>
             
             <div className="bg-[#F4F4F4] rounded-[40px] p-10 w-full shadow-sm">
-              <form className="flex flex-col gap-5">
+              <form className="flex flex-col gap-5" onSubmit={handleRegister}>
                 <input 
                   type="text" 
+                  name="first_name" // Обов'язково додай name
                   placeholder="Ім'я" 
+                  value={formData.first_name}
+                  onChange={handleChange}
                   className="w-full px-6 py-4 rounded-2xl bg-white border-2 border-transparent focus:outline-none focus:border-[#A3E635] text-gray-700 font-medium transition text-lg" 
+                  required
                 />
                 <input 
                   type="text" 
+                  name="last_name"
                   placeholder="Прізвище" 
+                  value={formData.last_name}
+                  onChange={handleChange}
                   className="w-full px-6 py-4 rounded-2xl bg-white border-2 border-transparent focus:outline-none focus:border-[#A3E635] text-gray-700 font-medium transition text-lg" 
+                  required
                 />
                 <input 
                   type="email" 
+                  name="email"
                   placeholder="Електронна пошта" 
+                  value={formData.email}
+                  onChange={handleChange}
                   className="w-full px-6 py-4 rounded-2xl bg-white border-2 border-transparent focus:outline-none focus:border-[#A3E635] text-gray-700 font-medium transition text-lg" 
+                  required
                 />
                 <input 
                   type="password" 
+                  name="password"
                   placeholder="Пароль" 
+                  value={formData.password}
+                  onChange={handleChange}
                   className="w-full px-6 py-4 rounded-2xl bg-white border-2 border-transparent focus:outline-none focus:border-[#A3E635] text-gray-700 font-medium transition text-lg" 
+                  required
                 />
                 
                 <button 
-                  type="button" 
+                  type="submit" // Змінили на submit
                   className="mt-4 px-10 py-5 bg-[#A3E635] rounded-2xl font-bold text-black text-xl hover:bg-[#92d624] transition-all shadow-sm active:scale-95 w-full"
                 >
                   Зареєструватися!
