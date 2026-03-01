@@ -1,15 +1,15 @@
 from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.orm import Session
-import models, database  # ПРИБРАНО КРАПКИ ТУТ
+import models, database 
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from passlib.context import CryptContext  
 
-# Створюємо таблиці в БД автоматично при старті
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
 models.Base.metadata.create_all(bind=database.engine)
 
 app = FastAPI()
-
-# Налаштування CORS, щоб React міг достукатися до Python
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173"],
@@ -26,25 +26,23 @@ class UserCreate(BaseModel):
 
 @app.post("/register")
 def register(user: UserCreate, db: Session = Depends(database.get_db)):
-    # Перевірка на дублікат email
     db_user = db.query(models.User).filter(models.User.email == user.email).first()
     if db_user:
-        raise HTTPException(status_code=400, detail="Email вже зареєстровано")
+        raise HTTPException(status_code=400, detail="Email already registered")
+    hashed_password = pwd_context.hash(user.password)
     
-    # Створення запису
     new_user = models.User(
         first_name=user.first_name,
         last_name=user.last_name,
         email=user.email,
-        password=user.password
+        password=hashed_password  
     )
     
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
-    return {"status": "success", "message": f"Користувач {user.first_name} створений!"}
+    return {"status": "success", "message": f"User {user.first_name} created successfully"}
 
-# Додано блок для зручного запуску
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
