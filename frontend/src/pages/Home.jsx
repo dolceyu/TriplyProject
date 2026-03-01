@@ -24,9 +24,12 @@ const Home = () => {
         </div>
 
         <div className="flex gap-6 z-10">
-          <button className="px-10 py-3 border-2 border-black rounded-full font-bold text-lg hover:bg-gray-50 transition">
+          <Link 
+            to="/login"
+            className="px-10 py-3 border-2 border-black rounded-full font-bold text-lg hover:bg-gray-50 transition shadow-[5px_5px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 inline-block text-center"
+          >
             Вхід
-          </button>
+          </Link>
           
           <Link 
             to="/register"

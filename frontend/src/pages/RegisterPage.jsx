@@ -1,5 +1,6 @@
-import React, { useState } from 'react'; // Додали useState
-import { Link } from 'react-router-dom';
+import React, { useState } from 'react'; 
+import { Link, useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import logoImg from '../assets/logo-mini.png';
 import triplyTitleImg from '../assets/main-triply.png';
 import trioImg from '../assets/register-trio.png';
@@ -7,7 +8,8 @@ import luggageImg from '../assets/travel-luggage.png';
 import ticketImg from '../assets/plane-ticket.png';
 
 const RegisterPage = () => {
-  // 1. Створюємо стан для форми
+  const navigate = useNavigate();
+
   const [formData, setFormData] = useState({
     first_name: '',
     last_name: '',
@@ -15,14 +17,23 @@ const RegisterPage = () => {
     password: ''
   });
 
-  // 2. Функція для оновлення полів
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  // 3. Функція відправки даних на бекенд
   const handleRegister = async (e) => {
     e.preventDefault();
+    if (!formData.first_name || !formData.last_name || !formData.email || !formData.password) {
+      toast.error("Будь ласка, заповніть усі поля", {
+        style: {
+          borderRadius: '15px',
+          background: '#333',
+          color: '#fff',
+        },
+      });
+      return; 
+    }
+
     try {
       const response = await fetch('http://127.0.0.1:8000/register', {
         method: 'POST',
@@ -33,14 +44,22 @@ const RegisterPage = () => {
       const data = await response.json();
 
       if (response.ok) {
-        alert("Успіх! Користувач збережений в базі.");
-        console.log(data);
+        toast.success(`Вітаємо, ${formData.first_name}! Акаунт створено успішно.`, {
+          duration: 3000,
+          style: {
+            borderRadius: '15px',
+            background: '#333',
+            color: '#fff',
+          },
+        });
+        
+        setTimeout(() => navigate('/login'), 1500);
       } else {
-        alert("Помилка: " + data.detail);
+        toast.error("Помилка: " + (data.detail || "Щось пішло не так"));
       }
     } catch (error) {
       console.error("Помилка зв'язку з сервером:", error);
-      alert("Сервер не відповідає!");
+      toast.error("Сервер не відповідає! Перевірте підключення.");
     }
   };
 
@@ -66,18 +85,17 @@ const RegisterPage = () => {
           <div className="w-full max-w-[650px] flex flex-col items-center">
             
             <img src={triplyTitleImg} alt="Triply" className="h-28 object-contain mb-2" />
-            <p className="text-gray-800 font-medium text-lg mb-8 text-center font-bold">Приєднуйтесь до Triply вже зараз!</p>
+            <p className="text-gray-800 font-bold text-xl mb-8 text-center">Приєднуйтесь до Triply вже зараз!</p>
             
             <div className="bg-[#F4F4F4] rounded-[40px] p-10 w-full shadow-sm">
-              <form className="flex flex-col gap-5" onSubmit={handleRegister}>
+              <form className="flex flex-col gap-5" onSubmit={handleRegister} noValidate>
                 <input 
                   type="text" 
-                  name="first_name" // Обов'язково додай name
+                  name="first_name"
                   placeholder="Ім'я" 
                   value={formData.first_name}
                   onChange={handleChange}
                   className="w-full px-6 py-4 rounded-2xl bg-white border-2 border-transparent focus:outline-none focus:border-[#A3E635] text-gray-700 font-medium transition text-lg" 
-                  required
                 />
                 <input 
                   type="text" 
@@ -86,7 +104,6 @@ const RegisterPage = () => {
                   value={formData.last_name}
                   onChange={handleChange}
                   className="w-full px-6 py-4 rounded-2xl bg-white border-2 border-transparent focus:outline-none focus:border-[#A3E635] text-gray-700 font-medium transition text-lg" 
-                  required
                 />
                 <input 
                   type="email" 
@@ -95,7 +112,6 @@ const RegisterPage = () => {
                   value={formData.email}
                   onChange={handleChange}
                   className="w-full px-6 py-4 rounded-2xl bg-white border-2 border-transparent focus:outline-none focus:border-[#A3E635] text-gray-700 font-medium transition text-lg" 
-                  required
                 />
                 <input 
                   type="password" 
@@ -104,17 +120,20 @@ const RegisterPage = () => {
                   value={formData.password}
                   onChange={handleChange}
                   className="w-full px-6 py-4 rounded-2xl bg-white border-2 border-transparent focus:outline-none focus:border-[#A3E635] text-gray-700 font-medium transition text-lg" 
-                  required
                 />
                 
                 <button 
-                  type="submit" // Змінили на submit
+                  type="submit" 
                   className="mt-4 px-10 py-5 bg-[#A3E635] rounded-2xl font-bold text-black text-xl hover:bg-[#92d624] transition-all shadow-sm active:scale-95 w-full"
                 >
                   Зареєструватися!
                 </button>
               </form>
             </div>
+
+            <p className="mt-6 text-gray-600 font-medium">
+              Вже маєте акаунт? <Link to="/login" className="text-[#A3E635] font-bold hover:underline">Увійти</Link>
+            </p>
           </div>
         </div>
 
