@@ -11,7 +11,9 @@ import SettingsTab from '../components/Dashboard/SettingsTab';
 const Dashboard = () => {
   const navigate = useNavigate();
   const [userName, setUserName] = useState('');
-  const [activeTab, setActiveTab] = useState('trips'); 
+  
+  const [activeTab, setActiveTab] = useState(localStorage.getItem('activeTab') || 'trips'); 
+  const [requestCount, setRequestCount] = useState(0);
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deletePassword, setDeletePassword] = useState('');
@@ -50,22 +52,41 @@ const Dashboard = () => {
     }
   }, [navigate]);
 
+  const fetchRequestCount = async () => {
+    const userEmail = localStorage.getItem('userEmail');
+    if (!userEmail) return;
+    try {
+      const response = await fetch(`http://127.0.0.1:8000/friend-requests/${userEmail}`);
+      if (response.ok) {
+        const data = await response.json();
+        setRequestCount(data.length);
+      }
+    } catch (err) {
+      console.error("Помилка каунтера:", err);
+    }
+  };
+
   useEffect(() => {
+    fetchRequestCount();
+    const interval = setInterval(fetchRequestCount, 60000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem('activeTab', activeTab);
     window.scrollTo({ top: 0, behavior: 'smooth' });
     setShowDeleteConfirm(false); 
     setDeletePassword('');
   }, [activeTab]);
 
   const handleLogout = () => {
-    localStorage.removeItem('userName');
-    localStorage.removeItem('userEmail');
+    localStorage.clear();
     toast.success("Ви вийшли з акаунта");
     navigate('/');
   };
 
   const handleSaveProfile = async () => {
     const userEmail = localStorage.getItem('userEmail');
-
     try {
       const response = await fetch('http://127.0.0.1:8000/update-profile', {
         method: 'PUT',
@@ -170,7 +191,19 @@ const Dashboard = () => {
         <div className="flex items-center gap-10">
           <div className="flex gap-6 font-semibold text-gray-500 text-lg">
             <button onClick={() => setActiveTab('trips')} className={`hover:text-black transition pb-1 ${activeTab === 'trips' ? 'text-black border-b-2 border-[#A3E635]' : ''}`}>Подорожі</button>
-            <button onClick={() => setActiveTab('friends')} className={`hover:text-black transition pb-1 ${activeTab === 'friends' ? 'text-black border-b-2 border-[#A3E635]' : ''}`}>Друзі</button>
+            
+            <button 
+              onClick={() => setActiveTab('friends')} 
+              className={`hover:text-black transition pb-1 relative ${activeTab === 'friends' ? 'text-black border-b-2 border-[#A3E635]' : ''}`}
+            >
+              Друзі
+              {requestCount > 0 && (
+                <span className="absolute -top-2 -right-4 bg-red-500 text-white text-[11px] font-black px-1.5 py-0.5 rounded-full border-2 border-[#F9FAFB] animate-pulse">
+                  {requestCount}
+                </span>
+              )}
+            </button>
+
             <button onClick={() => setActiveTab('profile')} className={`hover:text-black transition pb-1 ${activeTab === 'profile' ? 'text-black border-b-2 border-[#A3E635]' : ''}`}>Профіль</button>
             <button onClick={() => setActiveTab('settings')} className={`hover:text-black transition pb-1 ${activeTab === 'settings' ? 'text-black border-b-2 border-[#A3E635]' : ''}`}>Налаштування</button>
           </div>
@@ -184,7 +217,11 @@ const Dashboard = () => {
 
       <main className="flex-grow p-16 max-w-[1600px] w-full mx-auto">
         {activeTab === 'trips' && <TripsTab />}
-        {activeTab === 'friends' && <FriendsTab />}
+        
+        {activeTab === 'friends' && (
+          <FriendsTab onRequestAccepted={fetchRequestCount} />
+        )}
+
         {activeTab === 'profile' && (
           <ProfileTab 
             userName={userName} profileName={profileName} setProfileName={setProfileName}

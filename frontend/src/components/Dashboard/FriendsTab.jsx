@@ -1,86 +1,242 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
+import ConfirmModal from './ConfirmModal'; 
 
-const FriendsTab = () => {
-  // Твої поточні друзі
-  const [friends, setFriends] = useState([
-    { id: 1, name: 'Стефочка', email: 'stefka@gmail.com', status: 'online' },
-    { id: 2, name: 'Андрій', email: 'andrii@ukr.net', status: 'offline' }
-  ]);
+const FriendsTab = ({ onRequestAccepted }) => {
+  const userEmail = localStorage.getItem('userEmail');
+  
+  const [friends, setFriends] = useState([]);
+  const [friendRequests, setFriendRequests] = useState([]);
+  
+  const [searchEmail, setSearchEmail] = useState('');
+  const [foundUser, setFoundUser] = useState(null);
+  const [isSearching, setIsSearching] = useState(false);
 
-  // ЗАПИТИ В ДРУЗІ (новий стейт)
-  const [friendRequests, setFriendRequests] = useState([
-    { id: 10, name: 'Олена Коваль', email: 'olena@gmail.com' },
-    { id: 11, name: 'Максим подорожник', email: 'max_travel@ukr.net' }
-  ]);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [friendToDelete, setFriendToDelete] = useState(null);
 
-  const [searchTerm, setSearchTerm] = useState('');
+  useEffect(() => {
+    fetchFriends();
+    fetchRequests();
+  }, []);
 
-  // Логіка підтвердження дружби
-  const handleAccept = (request) => {
-    setFriends([...friends, { ...request, status: 'offline' }]); // Додаємо в друзі
-    setFriendRequests(friendRequests.filter(r => r.id !== request.id)); // Видаляємо із запитів
-    toast.success(`Тепер ви друзі з ${request.name}! 🤝`);
+  const fetchFriends = async () => {
+    try {
+      const response = await fetch(`http://127.0.0.1:8000/get-friends/${userEmail}`);
+      if (response.ok) {
+        const data = await response.json();
+        setFriends(data);
+      }
+    } catch (err) {
+      console.error("Помилка завантаження друзів");
+    }
   };
 
-  // Логіка відхилення
-  const handleDecline = (id) => {
-    setFriendRequests(friendRequests.filter(r => r.id !== id));
-    toast.error("Запит відхилено");
+  const fetchRequests = async () => {
+    try {
+      const response = await fetch(`http://127.0.0.1:8000/friend-requests/${userEmail}`);
+      if (response.ok) {
+        const data = await response.json();
+        setFriendRequests(data);
+      }
+    } catch (err) {
+      console.error("Помилка завантаження запитів");
+    }
+  };
+
+  const handleSearch = async () => {
+    if (!searchEmail) return;
+    setIsSearching(true);
+    try {
+      const response = await fetch(`http://127.0.0.1:8000/search-user/${searchEmail}`);
+      if (response.ok) {
+        const data = await response.json();
+        setFoundUser(data);
+      } else {
+        toast.error("Користувача не знайдено");
+        setFoundUser(null);
+      }
+    } catch (err) {
+      toast.error("Помилка пошуку");
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const sendRequest = async () => {
+    try {
+      const response = await fetch(`http://127.0.0.1:8000/send-request?sender_email=${userEmail}&receiver_email=${foundUser.email}`, {
+        method: 'POST'
+      });
+      if (response.ok) {
+        toast.success("Запит надіслано! 🚀");
+        setFoundUser(null);
+        setSearchEmail('');
+      } else {
+        const data = await response.json();
+        toast.error(data.detail || "Помилка");
+      }
+    } catch (err) {
+      toast.error("Сервер не відповідає");
+    }
+  };
+
+  const handleAccept = async (request) => {
+    try {
+      const response = await fetch(`http://127.0.0.1:8000/accept-friend-request/${request.id}`, {
+        method: 'PUT'
+      });
+      if (response.ok) {
+        toast.success(`Тепер ви друзі з ${request.name}! 🤝`);
+        fetchRequests();
+        fetchFriends();
+        if (onRequestAccepted) onRequestAccepted();
+      }
+    } catch (err) {
+      toast.error("Помилка підтвердження");
+    }
+  };
+
+  const openDeleteModal = (friend) => {
+    setFriendToDelete(friend);
+    setIsModalOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!friendToDelete) return;
+
+    try {
+      const response = await fetch(`http://127.0.0.1:8000/delete-friend?my_email=${userEmail}&friend_email=${friendToDelete.email}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        toast.success("Друга видалено");
+        fetchFriends();
+      } else {
+        toast.error("Не вдалося видалити друга");
+      }
+    } catch (err) {
+      toast.error("Помилка зв'язку з сервером");
+    } finally {
+      setIsModalOpen(false);
+      setFriendToDelete(null);
+    }
+  };
+
+  const handleDeclineRequest = async (request) => {
+    try {
+      const response = await fetch(`http://127.0.0.1:8000/delete-friend?my_email=${userEmail}&friend_email=${request.email}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        toast.error("Запит відхилено");
+        fetchRequests();
+        if (onRequestAccepted) onRequestAccepted();
+      }
+    } catch (err) {
+      toast.error("Помилка сервера");
+    }
+  };
+
+  const UserAvatar = ({ email, name, size = "w-16 h-16", textSize = "text-2xl" }) => {
+    const [imgError, setImgError] = useState(false);
+    const avatarSrc = `http://127.0.0.1:8000/get-avatar/${email}?t=${Date.now()}`;
+
+    return (
+      <div className={`${size} bg-[#A3E635] rounded-full flex items-center justify-center border-2 border-black shadow-sm overflow-hidden shrink-0`}>
+        {!imgError ? (
+          <img 
+            src={avatarSrc} 
+            alt="" 
+            className="w-full h-full object-cover"
+            onError={() => setImgError(true)}
+          />
+        ) : (
+          <span className={`${textSize} font-black text-black select-none`}>
+            {name ? name.charAt(0).toUpperCase() : 'U'}
+          </span>
+        )}
+      </div>
+    );
   };
 
   return (
     <div className="max-w-7xl mx-auto">
       <h1 className="text-4xl font-black mb-12 text-black">Мої друзі</h1>
 
-      {/* Сітка: основний список зліва (2/3) і запити справа (1/3) */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-10 items-start">
-        
-        {/* ЛІВА КОЛОНКА: Пошук та список друзів */}
         <div className="lg:col-span-2 flex flex-col gap-6">
-          <div className="relative">
+          <div className="relative group">
             <input 
               type="text" 
-              placeholder="Знайти друга за іменем або поштою..." 
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Введіть email користувача..." 
+              value={searchEmail}
+              onChange={(e) => setSearchEmail(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
               className="w-full px-8 py-5 rounded-[25px] bg-white border-2 border-transparent focus:border-[#A3E635] outline-none shadow-sm text-lg font-medium transition-all"
             />
-            <span className="absolute right-8 top-1/2 -translate-y-1/2 text-2xl">🔍</span>
+            <button 
+              onClick={handleSearch}
+              className="absolute right-4 top-1/2 -translate-y-1/2 bg-[#A3E635] p-3 rounded-2xl hover:scale-105 transition active:scale-95"
+            >
+              {isSearching ? '⏳' : '🔍'}
+            </button>
           </div>
+
+          {foundUser && (
+            <div className="bg-[#A3E635]/10 border-2 border-[#A3E635] rounded-[30px] p-6 flex items-center justify-between animate-in fade-in slide-in-from-top-4 shadow-sm">
+              <div className="flex items-center gap-4">
+                <UserAvatar email={foundUser.email} name={foundUser.first_name} size="w-14 h-14" textSize="text-xl" />
+                <div>
+                  <h3 className="font-black text-black text-lg">{foundUser.first_name}</h3>
+                  <p className="text-sm text-gray-500 font-medium">{foundUser.email}</p>
+                </div>
+              </div>
+              <button 
+                onClick={sendRequest}
+                className="px-8 py-3.5 bg-black text-white rounded-2xl font-bold hover:bg-gray-800 transition shadow-[4px_4px_0px_0px_rgba(163,230,53,1)] active:translate-y-1 active:shadow-none"
+              >
+                Додати в друзі
+              </button>
+            </div>
+          )}
 
           <div className="bg-white rounded-[40px] p-8 shadow-sm flex flex-col gap-4 border-2 border-gray-50">
             {friends.length > 0 ? (
               friends.map(friend => (
-                <div key={friend.id} className="flex items-center justify-between p-4 hover:bg-gray-50 rounded-3xl transition group">
+                <div key={friend.id} className="flex items-center justify-between p-5 hover:bg-gray-50 rounded-[30px] transition group border border-transparent hover:border-gray-100">
                   <div className="flex items-center gap-5">
-                    <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center text-2xl font-black border-2 border-black">
-                      {friend.name.charAt(0)}
-                    </div>
+                    <UserAvatar email={friend.email} name={friend.name} />
                     <div>
-                      <h3 className="text-xl font-bold text-black">{friend.name}</h3>
-                      <p className="text-gray-400 font-medium">{friend.email}</p>
+                      <h3 className="text-xl font-extrabold text-black leading-tight">{friend.name}</h3>
+                      <p className="text-gray-400 font-bold text-sm tracking-wide uppercase">{friend.email}</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <span className={`w-3 h-3 rounded-full ${friend.status === 'online' ? 'bg-green-500' : 'bg-gray-300'}`}></span>
-                    <button className="opacity-0 group-hover:opacity-100 px-4 py-2 bg-red-50 text-red-500 rounded-xl font-bold transition text-sm">Видалити</button>
-                  </div>
+                  <button 
+                    onClick={() => openDeleteModal(friend)}
+                    className="opacity-0 group-hover:opacity-100 px-5 py-2.5 bg-red-50 text-red-500 rounded-xl font-black transition-all text-xs hover:bg-red-500 hover:text-white"
+                  >
+                    ВИДАЛИТИ
+                  </button>
                 </div>
               ))
             ) : (
-              <p className="text-center text-gray-400 py-10 font-bold italic">У вас поки немає друзів. Час когось запросити! 👋</p>
+              <div className="text-center py-16 flex flex-col items-center gap-4">
+                <span className="text-6xl grayscale">🏝️</span>
+                <p className="text-gray-400 font-black text-xl italic max-w-xs leading-snug">Тут поки порожньо... Знайди когось для спільної подорожі!</p>
+              </div>
             )}
           </div>
         </div>
 
-        {/* ПРАВА КОЛОНКА: Запити на дружбу */}
         <div className="bg-white rounded-[40px] p-8 shadow-sm border-2 border-dashed border-[#A3E635] sticky top-10">
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center justify-between mb-8">
             <h2 className="text-2xl font-black text-black">Запити</h2>
             {friendRequests.length > 0 && (
-              <span className="bg-[#A3E635] text-black px-3 py-1 rounded-full text-sm font-black border border-black">
-                {friendRequests.length}
+              <span className="bg-black text-[#A3E635] px-4 py-1 rounded-full text-xs font-black border-2 border-[#A3E635] animate-pulse">
+                {friendRequests.length} НОВИХ
               </span>
             )}
           </div>
@@ -88,26 +244,24 @@ const FriendsTab = () => {
           <div className="flex flex-col gap-6">
             {friendRequests.length > 0 ? (
               friendRequests.map(request => (
-                <div key={request.id} className="flex flex-col gap-4 p-5 bg-gray-50 rounded-[30px] border border-gray-100">
+                <div key={request.id} className="flex flex-col gap-4 p-6 bg-gray-50 rounded-[35px] border-2 border-white shadow-inner">
                   <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-black text-[#A3E635] rounded-full flex items-center justify-center font-black">
-                      {request.name.charAt(0)}
-                    </div>
+                    <UserAvatar email={request.email} name={request.name} size="w-12 h-12" textSize="text-lg" />
                     <div className="overflow-hidden">
-                      <h4 className="font-bold text-black truncate">{request.name}</h4>
-                      <p className="text-xs text-gray-400 truncate">{request.email}</p>
+                      <h4 className="font-black text-black text-sm truncate uppercase tracking-tighter">{request.name}</h4>
+                      <p className="text-[11px] text-gray-400 font-bold truncate leading-none">{request.email}</p>
                     </div>
                   </div>
                   <div className="flex gap-2">
                     <button 
-                      onClick={() => handleAccept(request)}
-                      className="flex-grow py-3 bg-[#A3E635] text-black rounded-xl font-black text-sm hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all active:translate-y-0.5"
+                      onClick={() => handleAccept(request)} 
+                      className="flex-grow py-3.5 bg-[#A3E635] text-black rounded-2xl font-black text-xs border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:bg-[#92d624] transition-all active:translate-y-0.5 active:shadow-none"
                     >
-                      Прийняти
+                      ПРИЙНЯТИ
                     </button>
                     <button 
-                      onClick={() => handleDecline(request.id)}
-                      className="px-4 py-3 bg-white border border-gray-200 text-gray-400 rounded-xl font-bold text-sm hover:text-red-500 hover:border-red-200 transition"
+                      onClick={() => handleDeclineRequest(request)}
+                      className="px-5 py-3.5 bg-white border-2 border-gray-200 text-gray-400 rounded-2xl font-black text-xs hover:text-red-500 hover:border-red-500 transition-all"
                     >
                       ✕
                     </button>
@@ -115,14 +269,21 @@ const FriendsTab = () => {
                 </div>
               ))
             ) : (
-              <div className="text-center py-6">
-                <p className="text-gray-400 text-sm font-medium">Нових запитів немає ☕</p>
+              <div className="text-center py-10 bg-gray-50/50 rounded-[30px] border-2 border-dotted border-gray-200">
+                <p className="text-gray-400 text-sm font-black uppercase tracking-widest">Немає нових запитів</p>
               </div>
             )}
           </div>
         </div>
-
       </div>
+
+      <ConfirmModal 
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onConfirm={handleConfirmDelete}
+        title="Видалити друга?"
+        message={friendToDelete ? `Ви впевнені, що хочете видалити ${friendToDelete.name} (${friendToDelete.email}) зі списку друзів? Ця дія незворотна.` : ""}
+      />
     </div>
   );
 };
