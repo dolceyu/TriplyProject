@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, JSON
+from sqlalchemy import Column, Integer, String, JSON, LargeBinary
 from database import Base
 
 class User(Base):
@@ -11,3 +11,4 @@ class User(Base):
     password = Column(String) 
     birth_date = Column(String, nullable=True) 
     preferences = Column(JSON, nullable=True)
+    avatar_blob = Column(LargeBinary, nullable=True)

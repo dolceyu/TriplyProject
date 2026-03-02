@@ -1,7 +1,8 @@
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, File, UploadFile
 from sqlalchemy.orm import Session
 import models, database 
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 from pydantic import BaseModel
 from passlib.context import CryptContext 
 from typing import Optional, Dict
@@ -37,8 +38,18 @@ class UserLogin(BaseModel):
 
 class ProfileUpdate(BaseModel):
     email: str  
+    first_name: Optional[str] = None  # ДОДАНО: можливість оновлювати ім'я
     dob: Optional[str] = None
     preferences: Optional[Dict[str, bool]] = None
+
+class PasswordChange(BaseModel):
+    email: str
+    old_password: str
+    new_password: str
+
+class DeleteAccount(BaseModel):
+    email: str
+    password: str
 
 # --- ЕНДПОІНТИ АВТОРИЗАЦІЇ ---
 
@@ -102,14 +113,82 @@ def update_profile(data: ProfileUpdate, db: Session = Depends(database.get_db)):
     if not db_user:
         raise HTTPException(status_code=404, detail="Користувача не знайдено")
 
+    # Оновлення імені (ніка)
+    if data.first_name is not None:
+        db_user.first_name = data.first_name
+
+    # Оновлення дати народження
     if data.dob is not None:
         db_user.birth_date = data.dob
     
+    # Оновлення вподобань
     if data.preferences is not None:
         db_user.preferences = data.preferences
     
     db.commit()
     return {"status": "success", "message": "Профіль оновлено в PostgreSQL"}
+
+@app.put("/change-password")
+def change_password(data: PasswordChange, db: Session = Depends(database.get_db)):
+    db_user = db.query(models.User).filter(models.User.email == data.email).first()
+    
+    if not db_user:
+        raise HTTPException(status_code=404, detail="Користувача не знайдено")
+    
+    if not pwd_context.verify(data.old_password, db_user.password):
+        raise HTTPException(status_code=400, detail="Старий пароль невірний")
+    
+    db_user.password = pwd_context.hash(data.new_password)
+    db.commit()
+    
+    return {"status": "success", "message": "Пароль успішно змінено"}
+
+@app.delete("/delete-account")
+def delete_account(data: DeleteAccount, db: Session = Depends(database.get_db)):
+    db_user = db.query(models.User).filter(models.User.email == data.email).first()
+    
+    if not db_user:
+        raise HTTPException(status_code=404, detail="Користувача не знайдено")
+    
+    if not pwd_context.verify(data.password, db_user.password):
+        raise HTTPException(status_code=400, detail="Пароль невірний")
+    
+    db.delete(db_user)
+    db.commit()
+    
+    return {"status": "success", "message": "Акаунт успішно видалено"}
+
+@app.post("/upload-avatar/{email}")
+async def upload_avatar(email: str, file: UploadFile = File(...), db: Session = Depends(database.get_db)):
+    db_user = db.query(models.User).filter(models.User.email == email).first()
+    if not db_user:
+        raise HTTPException(status_code=404, detail="Користувача не знайдено")
+
+    if file.content_type not in ["image/jpeg", "image/png"]:
+        raise HTTPException(status_code=400, detail="Можна завантажувати тільки JPEG або PNG")
+
+    file_bytes = await file.read()
+    db_user.avatar_blob = file_bytes
+    db.commit()
+
+    return {"status": "success", "message": "Аватарку успішно завантажено"}
+
+@app.get("/get-avatar/{email}")
+def get_avatar(email: str, db: Session = Depends(database.get_db)):
+    db_user = db.query(models.User).filter(models.User.email == email).first()
+    if not db_user or not db_user.avatar_blob:
+        raise HTTPException(status_code=404, detail="Аватарку не знайдено")
+    return Response(content=db_user.avatar_blob, media_type="image/jpeg")
+
+@app.delete("/delete-avatar/{email}")
+def delete_avatar(email: str, db: Session = Depends(database.get_db)):
+    db_user = db.query(models.User).filter(models.User.email == email).first()
+    if not db_user:
+        raise HTTPException(status_code=404, detail="Користувача не знайдено")
+    
+    db_user.avatar_blob = None 
+    db.commit()
+    return {"status": "success", "message": "Аватарку видалено"}
 
 if __name__ == "__main__":
     import uvicorn

@@ -25,7 +25,6 @@ const Dashboard = () => {
     mountains: false, sea: false, museums: false, active: true, coffee: true,
   });
 
-  // 1. ОЖИВЛЯЄМО: Завантаження даних з БД при вході
   useEffect(() => {
     const savedName = localStorage.getItem('userName');
     const userEmail = localStorage.getItem('userEmail');
@@ -36,10 +35,14 @@ const Dashboard = () => {
       setUserName(savedName);
       setProfileName(savedName);
       
-      // Запит до бекенду, щоб отримати дату та вподобання з PostgreSQL
       fetch(`http://127.0.0.1:8000/get-profile/${userEmail}`)
         .then(res => res.json())
         .then(data => {
+          if (data.first_name) {
+            setUserName(data.first_name);
+            setProfileName(data.first_name);
+            localStorage.setItem('userName', data.first_name);
+          }
           if (data.dob) setDob(data.dob);
           if (data.preferences) setPreferences(data.preferences);
         })
@@ -60,7 +63,6 @@ const Dashboard = () => {
     navigate('/');
   };
 
-  // 2. ОЖИВЛЯЄМО: Збереження даних у PostgreSQL
   const handleSaveProfile = async () => {
     const userEmail = localStorage.getItem('userEmail');
 
@@ -70,6 +72,7 @@ const Dashboard = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           email: userEmail,
+          first_name: profileName, 
           dob: dob,
           preferences: preferences
         }),
@@ -89,25 +92,61 @@ const Dashboard = () => {
     }
   };
 
-  const handleChangePassword = () => {
+  const handleChangePassword = async () => {
     if (!oldPassword || !newPassword) {
       toast.error("Заповніть обидва поля пароля");
       return;
     }
-    toast.success("Пароль змінено (візуально)");
-    setOldPassword('');
-    setNewPassword('');
+    const userEmail = localStorage.getItem('userEmail');
+    try {
+      const response = await fetch('http://127.0.0.1:8000/change-password', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: userEmail,
+          old_password: oldPassword,
+          new_password: newPassword
+        }),
+      });
+      const data = await response.json();
+      if (response.ok) {
+        toast.success("Пароль успішно змінено! 🔐");
+        setOldPassword('');
+        setNewPassword('');
+      } else {
+        toast.error(data.detail || "Помилка при зміні пароля");
+      }
+    } catch (error) {
+      toast.error("Сервер не відповідає");
+    }
   };
 
-  const handleDeleteAccount = () => {
+  const handleDeleteAccount = async () => {
     if (!deletePassword) {
-      toast.error("Введіть пароль");
+      toast.error("Введіть пароль для підтвердження");
       return;
     }
-    localStorage.removeItem('userName');
-    localStorage.removeItem('userEmail');
-    toast.success("Акаунт видалено");
-    navigate('/');
+    const userEmail = localStorage.getItem('userEmail');
+    try {
+      const response = await fetch('http://127.0.0.1:8000/delete-account', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: userEmail,
+          password: deletePassword
+        }),
+      });
+      if (response.ok) {
+        localStorage.clear();
+        toast.success("Акаунт назавжди видалено");
+        navigate('/');
+      } else {
+        const data = await response.json();
+        toast.error(data.detail || "Не вдалося видалити акаунт");
+      }
+    } catch (error) {
+      toast.error("Сервер не відповідає");
+    }
   };
 
   const togglePreference = (key) => {
