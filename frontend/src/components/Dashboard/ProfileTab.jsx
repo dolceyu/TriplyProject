@@ -66,7 +66,15 @@ const ProfileTab = ({
           </div>
           <div className="flex flex-wrap gap-4 mt-4">
             {Object.keys(preferences).map((key) => (
-              <button key={key} onClick={() => togglePreference(key)} className={`px-6 py-3 rounded-full font-bold text-lg transition-all border-2 ${preferences[key] ? 'bg-[#A3E635] border-[#A3E635] text-black shadow-md' : 'bg-transparent border-gray-200 text-gray-500 hover:border-gray-300'}`}>
+              <button 
+                key={key} 
+                onClick={() => togglePreference(key)} 
+                // Залишаємо технічне блокування, але забираємо візуальну "сірість"
+                disabled={!isEditingProfile}
+                className={`px-6 py-3 rounded-full font-bold text-lg transition-all border-2 
+                  ${preferences[key] ? 'bg-[#A3E635] border-[#A3E635] text-black shadow-md' : 'bg-transparent border-gray-200 text-gray-500 hover:border-gray-300'}
+                  ${!isEditingProfile ? 'cursor-default' : 'cursor-pointer hover:scale-105 active:scale-95'}`}
+              >
                 {key === 'mountains' && '🏔️ Гори'}
                 {key === 'sea' && '🏖️ Море та релакс'}
                 {key === 'active' && '🏃‍♀️ Активний відпочинок'}

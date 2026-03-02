@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String
+from sqlalchemy import Column, Integer, String, JSON
 from database import Base
 
 class User(Base):
@@ -8,4 +8,6 @@ class User(Base):
     first_name = Column(String)
     last_name = Column(String)
     email = Column(String, unique=True, index=True)
-    password = Column(String) # У майбутньому ми будемо його хешувати!
+    password = Column(String) 
+    birth_date = Column(String, nullable=True) 
+    preferences = Column(JSON, nullable=True)

@@ -3,7 +3,6 @@ import { useNavigate, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import logoImg from '../assets/logo-mini.png';
 
-// Імпортуємо компоненти
 import TripsTab from '../components/Dashboard/TripsTab';
 import FriendsTab from '../components/Dashboard/FriendsTab';
 import ProfileTab from '../components/Dashboard/ProfileTab';
@@ -14,13 +13,11 @@ const Dashboard = () => {
   const [userName, setUserName] = useState('');
   const [activeTab, setActiveTab] = useState('trips'); 
 
-  // Стейт для налаштувань
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deletePassword, setDeletePassword] = useState('');
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
 
-  // Стейт для профілю
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [profileName, setProfileName] = useState('');
   const [dob, setDob] = useState(''); 
@@ -28,13 +25,25 @@ const Dashboard = () => {
     mountains: false, sea: false, museums: false, active: true, coffee: true,
   });
 
+  // 1. ОЖИВЛЯЄМО: Завантаження даних з БД при вході
   useEffect(() => {
     const savedName = localStorage.getItem('userName');
-    if (!savedName) {
+    const userEmail = localStorage.getItem('userEmail');
+
+    if (!savedName || !userEmail) {
       navigate('/login');
     } else {
       setUserName(savedName);
       setProfileName(savedName);
+      
+      // Запит до бекенду, щоб отримати дату та вподобання з PostgreSQL
+      fetch(`http://127.0.0.1:8000/get-profile/${userEmail}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.dob) setDob(data.dob);
+          if (data.preferences) setPreferences(data.preferences);
+        })
+        .catch(err => console.error("Помилка завантаження профілю:", err));
     }
   }, [navigate]);
 
@@ -46,15 +55,38 @@ const Dashboard = () => {
 
   const handleLogout = () => {
     localStorage.removeItem('userName');
+    localStorage.removeItem('userEmail');
     toast.success("Ви вийшли з акаунта");
     navigate('/');
   };
 
-  const handleSaveProfile = () => {
-    localStorage.setItem('userName', profileName);
-    setUserName(profileName);
-    setIsEditingProfile(false);
-    toast.success("Профіль успішно оновлено!");
+  // 2. ОЖИВЛЯЄМО: Збереження даних у PostgreSQL
+  const handleSaveProfile = async () => {
+    const userEmail = localStorage.getItem('userEmail');
+
+    try {
+      const response = await fetch('http://127.0.0.1:8000/update-profile', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: userEmail,
+          dob: dob,
+          preferences: preferences
+        }),
+      });
+
+      if (response.ok) {
+        localStorage.setItem('userName', profileName);
+        setUserName(profileName);
+        setIsEditingProfile(false);
+        toast.success("Дані збережено в базу! 🚀");
+      } else {
+        const error = await response.json();
+        toast.error(error.detail || "Помилка збереження");
+      }
+    } catch (error) {
+      toast.error("Сервер не відповідає");
+    }
   };
 
   const handleChangePassword = () => {
@@ -73,6 +105,7 @@ const Dashboard = () => {
       return;
     }
     localStorage.removeItem('userName');
+    localStorage.removeItem('userEmail');
     toast.success("Акаунт видалено");
     navigate('/');
   };
@@ -109,11 +142,10 @@ const Dashboard = () => {
           </div>
         </div>
       </nav>
+
       <main className="flex-grow p-16 max-w-[1600px] w-full mx-auto">
         {activeTab === 'trips' && <TripsTab />}
-        
         {activeTab === 'friends' && <FriendsTab />}
-        
         {activeTab === 'profile' && (
           <ProfileTab 
             userName={userName} profileName={profileName} setProfileName={setProfileName}
@@ -122,7 +154,6 @@ const Dashboard = () => {
             preferences={preferences} togglePreference={togglePreference} formatDate={formatDate}
           />
         )}
-        
         {activeTab === 'settings' && (
           <SettingsTab 
             oldPassword={oldPassword} setOldPassword={setOldPassword}

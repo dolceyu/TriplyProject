@@ -17,11 +17,7 @@ const LoginPage = () => {
     e.preventDefault();
     if (!formData.email || !formData.password) {
       toast.error("Введіть електронну пошту та пароль", {
-        style: {
-          borderRadius: '15px',
-          background: '#333',
-          color: '#fff',
-        },
+        style: { borderRadius: '15px', background: '#333', color: '#fff' },
       });
       return; 
     }
@@ -36,16 +32,17 @@ const LoginPage = () => {
       const data = await response.json();
 
       if (response.ok) {
-        localStorage.setItem('userName', data.user);
+        // Зберігаємо ім'я для вітання
+        localStorage.setItem('userName', data.user_name || data.user);
         
-        toast.success(`Вітаємо, ${data.user}! Вхід успішний.`, {
+        // ВАЖЛИВО: Зберігаємо email для роботи з профілем у БД
+        localStorage.setItem('userEmail', formData.email);
+        
+        toast.success(`Вітаємо, ${data.user_name || data.user}! Вхід успішний.`, {
           duration: 3000,
-          style: {
-            borderRadius: '15px',
-            background: '#333',
-            color: '#fff',
-          },
+          style: { borderRadius: '15px', background: '#333', color: '#fff' },
         });
+        
         setTimeout(() => navigate('/dashboard'), 1500); 
       } else {
         toast.error("Помилка: " + (data.detail || "Невірні дані"));
