@@ -46,8 +46,7 @@ const LoginPage = () => {
             color: '#fff',
           },
         });
-        
-        setTimeout(() => navigate('/'), 1500); 
+        setTimeout(() => navigate('/dashboard'), 1500); 
       } else {
         toast.error("Помилка: " + (data.detail || "Невірні дані"));
       }
