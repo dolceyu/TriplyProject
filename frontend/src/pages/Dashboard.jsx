@@ -23,8 +23,11 @@ const Dashboard = () => {
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [profileName, setProfileName] = useState('');
   const [dob, setDob] = useState(''); 
+  
   const [preferences, setPreferences] = useState({
-    mountains: false, sea: false, museums: false, active: true, coffee: true,
+    mountains: false, sea: false, museums: false, nature: false, 
+    foodie: false, nightlife: false, shopping: false, active: false, 
+    relax: false, roadtrips: false
   });
 
   useEffect(() => {
@@ -46,7 +49,7 @@ const Dashboard = () => {
             localStorage.setItem('userName', data.first_name);
           }
           if (data.dob) setDob(data.dob);
-          if (data.preferences) setPreferences(data.preferences);
+          if (data.preferences) setPreferences(prev => ({ ...prev, ...data.preferences }));
         })
         .catch(err => console.error("Помилка завантаження профілю:", err));
     }
@@ -103,7 +106,7 @@ const Dashboard = () => {
         localStorage.setItem('userName', profileName);
         setUserName(profileName);
         setIsEditingProfile(false);
-        toast.success("Дані збережено в базу! 🚀");
+        toast.success("Дані збережено! 🚀");
       } else {
         const error = await response.json();
         toast.error(error.detail || "Помилка збереження");

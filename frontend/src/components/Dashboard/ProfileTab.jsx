@@ -58,6 +58,19 @@ const ProfileTab = ({
     }
   };
 
+  const preferenceLabels = {
+    mountains: '🏔️ Гори',
+    sea: '🏖️ Море та пляж',
+    museums: '🏛️ Музеї та архітектура',
+    nature: '🌲 Природа та еко-туризм',
+    foodie: '🍕 Гастротури та ресторани',
+    nightlife: '🪩 Вечірки та клуби',
+    shopping: '🛍️ Шопінг',
+    active: '🏃‍♀️ Активний відпочинок',
+    relax: '🧘‍♀️ Спокійний відпочинок / SPA',
+    roadtrips: '🚗 Подорожі на авто'
+  };
+
   return (
     <div className="max-w-5xl mx-auto">
       <div className="flex justify-between items-center mb-12">
@@ -68,7 +81,7 @@ const ProfileTab = ({
             onClick={() => setIsEditingProfile(true)} 
             className="px-8 py-4 bg-white border-2 border-black rounded-2xl font-bold text-lg hover:bg-gray-50 transition shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:translate-y-1 active:shadow-none"
           >
-            ⚙️ Редагувати профіль
+            Редагувати профіль
           </button>
         ) : (
           <div className="flex gap-4">
@@ -200,24 +213,25 @@ const ProfileTab = ({
           </div>
           
           <div className="flex flex-wrap gap-4 mt-2">
-            {Object.keys(preferences).map((key) => (
-              <button 
-                key={key} 
-                onClick={() => togglePreference(key)} 
-                disabled={!isEditingProfile}
-                className={`px-8 py-4 rounded-[20px] font-bold text-lg transition-all border-2 
-                  ${preferences[key] 
-                    ? 'bg-[#A3E635] border-black text-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]' 
-                    : 'bg-white border-gray-200 text-gray-400 hover:border-gray-300'}
-                  ${!isEditingProfile ? 'cursor-default' : 'cursor-pointer hover:-translate-y-1 active:translate-y-0 active:shadow-none'}`}
-              >
-                {key === 'mountains' && '🏔️ Гори'}
-                {key === 'sea' && '🏖️ Море та релакс'}
-                {key === 'active' && '🏃‍♀️ Активний відпочинок'}
-                {key === 'museums' && '🏛️ Музеї та архітектура'}
-                {key === 'coffee' && '☕ Кав\'ярні'}
-              </button>
-            ))}
+            {Object.keys(preferences)
+              .filter(key => key !== 'coffee')
+              .map((key) => {
+              const label = preferenceLabels[key] || key;
+              return (
+                <button 
+                  key={key} 
+                  onClick={() => togglePreference(key)} 
+                  disabled={!isEditingProfile}
+                  className={`px-8 py-4 rounded-[20px] font-bold text-lg transition-all border-2 
+                    ${preferences[key] 
+                      ? 'bg-[#A3E635] border-black text-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]' 
+                      : 'bg-white border-gray-200 text-gray-400 hover:border-gray-300'}
+                    ${!isEditingProfile ? 'cursor-default' : 'cursor-pointer hover:-translate-y-1 active:translate-y-0 active:shadow-none'}`}
+                >
+                  {label}
+                </button>
+              );
+            })}
           </div>
         </div>
       </div>

@@ -1,21 +1,18 @@
 from fastapi import FastAPI, Depends, HTTPException, File, UploadFile, Response
 from sqlalchemy.orm import Session
-from sqlalchemy import or_, and_
+from sqlalchemy import or_, and_, not_
 import models, database 
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from passlib.context import CryptContext 
 from typing import Optional, Dict, List
 
-# Налаштування хешування паролів
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-# Створення таблиць у PostgreSQL
 models.Base.metadata.create_all(bind=database.engine)
 
 app = FastAPI(title="Triply API")
 
-# Налаштування CORS для React
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173"],
@@ -23,8 +20,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# --- СХЕМИ ДАНИХ (Pydantic) ---
 
 class UserCreate(BaseModel):
     first_name: str
@@ -51,7 +46,6 @@ class DeleteAccount(BaseModel):
     email: str
     password: str
 
-# --- ЕНДПОІНТИ АВТОРИЗАЦІЇ ---
 
 @app.post("/register")
 def register(user: UserCreate, db: Session = Depends(database.get_db)):
@@ -81,17 +75,23 @@ def login(user: UserLogin, db: Session = Depends(database.get_db)):
         "email": db_user.email  
     }
 
-# --- ЕНДПОІНТИ ПРОФІЛЮ ТА АВАТАРОК ---
 
 @app.get("/get-profile/{email}")
 def get_profile(email: str, db: Session = Depends(database.get_db)):
     user = db.query(models.User).filter(models.User.email == email).first()
     if not user:
         raise HTTPException(status_code=404, detail="Профіль не знайдено")
+    
+    default_prefs = {
+        "mountains": False, "sea": False, "museums": False, "nature": False, 
+        "foodie": False, "nightlife": False, "shopping": False, "active": False, 
+        "relax": False, "roadtrips": False
+    }
+
     return {
         "first_name": user.first_name,
         "dob": user.birth_date,
-        "preferences": user.preferences or {"mountains": False, "sea": False, "museums": False, "active": True, "coffee": True}
+        "preferences": user.preferences or default_prefs
     }
 
 @app.put("/update-profile")
@@ -131,8 +131,6 @@ def delete_avatar(email: str, db: Session = Depends(database.get_db)):
     db.commit()
     return {"status": "success"}
 
-# --- СИСТЕМА ДРУЗІВ ---
-
 @app.get("/search-user/{email}")
 def search_user(email: str, db: Session = Depends(database.get_db)):
     user = db.query(models.User).filter(models.User.email == email).first()
@@ -145,7 +143,6 @@ def send_request(sender_email: str, receiver_email: str, db: Session = Depends(d
     me = db.query(models.User).filter(models.User.email == sender_email).first()
     friend = db.query(models.User).filter(models.User.email == receiver_email).first()
     
-    # Перевірка, чи не відправляємо запит самі собі або чи вже є такий запит
     if me.id == friend.id:
         raise HTTPException(status_code=400, detail="Не можна додати самого себе")
     
@@ -215,7 +212,51 @@ def delete_friend(my_email: str, friend_email: str, db: Session = Depends(databa
         return {"status": "success"}
     raise HTTPException(status_code=404, detail="Дружбу не знайдено")
 
-# --- БЕЗПЕКА ТА НАЛАШТУВАННЯ ---
+
+@app.get("/recommend-friends/{email}")
+def recommend_friends(email: str, db: Session = Depends(database.get_db)):
+    user = db.query(models.User).filter(models.User.email == email).first()
+    
+    if not user or not user.preferences:
+        return []
+
+    existing_relations = db.query(models.Friendship).filter(
+        or_(models.Friendship.user_id == user.id, models.Friendship.friend_id == user.id)
+    ).all()
+    
+    excluded_ids = {user.id}
+    for rel in existing_relations:
+        excluded_ids.add(rel.user_id)
+        excluded_ids.add(rel.friend_id)
+        
+    potential_friends = db.query(models.User).filter(~models.User.id.in_(excluded_ids)).all()
+    
+    recommendations = []
+    my_prefs = user.preferences
+    
+    for pf in potential_friends:
+        if not pf.preferences:
+            continue 
+            
+        score = 0
+        shared_traits = []
+        
+        for key, val in my_prefs.items():
+            if val is True and pf.preferences.get(key) is True:
+                score += 1
+                shared_traits.append(key) 
+                
+        if score > 0:
+            recommendations.append({
+                "id": pf.id,
+                "first_name": pf.first_name,
+                "email": pf.email,
+                "score": score,
+                "shared_traits": shared_traits
+            })
+            
+    recommendations.sort(key=lambda x: x["score"], reverse=True)
+    return recommendations[:4]
 
 @app.put("/change-password")
 def change_password(data: PasswordChange, db: Session = Depends(database.get_db)):
