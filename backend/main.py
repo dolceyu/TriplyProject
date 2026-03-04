@@ -1,4 +1,5 @@
-from fastapi import FastAPI, Depends, HTTPException, File, UploadFile, Response
+import json
+from fastapi import FastAPI, Depends, HTTPException, File, UploadFile, Response, Form
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, and_, not_
 import models, database 
@@ -7,11 +8,17 @@ from pydantic import BaseModel
 from passlib.context import CryptContext 
 from typing import Optional, Dict, List
 
+# 🔴 ПІДКЛЮЧАЄМО РОУТЕР
+from routers import itinerary
+
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 models.Base.metadata.create_all(bind=database.engine)
 
 app = FastAPI(title="Triply API")
+
+# 🔴 АКТИВУЄМО РОУТЕР
+app.include_router(itinerary.router)
 
 app.add_middleware(
     CORSMiddleware,
@@ -45,6 +52,10 @@ class PasswordChange(BaseModel):
 class DeleteAccount(BaseModel):
     email: str
     password: str
+
+class JoinTripRequest(BaseModel):
+    email: str
+    trip_code: str    
 
 
 @app.post("/register")
@@ -212,7 +223,6 @@ def delete_friend(my_email: str, friend_email: str, db: Session = Depends(databa
         return {"status": "success"}
     raise HTTPException(status_code=404, detail="Дружбу не знайдено")
 
-
 @app.get("/recommend-friends/{email}")
 def recommend_friends(email: str, db: Session = Depends(database.get_db)):
     user = db.query(models.User).filter(models.User.email == email).first()
@@ -257,6 +267,150 @@ def recommend_friends(email: str, db: Session = Depends(database.get_db)):
             
     recommendations.sort(key=lambda x: x["score"], reverse=True)
     return recommendations[:4]
+
+# --- НОВІ ЕНДПОЇНТИ ДЛЯ ПОДОРОЖЕЙ ---
+
+@app.post("/create-trip")
+async def create_trip(
+    trip_data: str = Form(...), 
+    file: UploadFile = File(None), 
+    db: Session = Depends(database.get_db)
+):
+    data = json.loads(trip_data)
+    creator = db.query(models.User).filter(models.User.email == data['creator_email']).first()
+    
+    if not creator:
+        raise HTTPException(status_code=404, detail="Творця не знайдено")
+
+    new_trip = models.Trip(
+        title=data['title'],
+        destination=data['destination'],
+        start_date=data['start_date'] or None, 
+        end_date=data['end_date'] or None,
+        trip_code=data['trip_code'],
+        creator_id=creator.id
+    )
+
+    if file and file.content_type in ["image/jpeg", "image/png"]:
+        new_trip.image_blob = await file.read()
+
+    participants_emails = data.get('participants', []) + [data['creator_email']]
+    unique_emails = list(set(participants_emails)) 
+    
+    for email in unique_emails:
+        user = db.query(models.User).filter(models.User.email == email).first()
+        if user:
+            new_trip.participants.append(user)
+
+    db.add(new_trip)
+    db.commit()
+    
+    return {"status": "success", "trip_id": new_trip.id}
+
+@app.put("/update-trip/{trip_id}")
+async def update_trip(
+    trip_id: int,
+    trip_data: str = Form(...), 
+    file: UploadFile = File(None), 
+    db: Session = Depends(database.get_db)
+):
+    trip = db.query(models.Trip).filter(models.Trip.id == trip_id).first()
+    if not trip:
+        raise HTTPException(status_code=404, detail="Подорож не знайдено")
+        
+    data = json.loads(trip_data)
+    
+    trip.title = data['title']
+    trip.destination = data['destination']
+    trip.start_date = data['start_date'] or None
+    trip.end_date = data['end_date'] or None
+
+    if file and file.content_type in ["image/jpeg", "image/png"]:
+        trip.image_blob = await file.read()
+
+    trip.participants.clear()
+    participants_emails = data.get('participants', []) + [data['creator_email']]
+    unique_emails = list(set(participants_emails)) 
+    
+    for email in unique_emails:
+        user = db.query(models.User).filter(models.User.email == email).first()
+        if user:
+            trip.participants.append(user)
+
+    db.commit()
+    return {"status": "success"}
+
+@app.delete("/delete-trip/{trip_id}")
+def delete_trip(trip_id: int, db: Session = Depends(database.get_db)):
+    trip = db.query(models.Trip).filter(models.Trip.id == trip_id).first()
+    if not trip:
+        raise HTTPException(status_code=404, detail="Подорож не знайдено")
+    
+    trip.participants.clear()
+    db.commit()
+    
+    db.delete(trip)
+    db.commit()
+    return {"status": "success"}
+
+@app.get("/get-trips/{email}")
+def get_trips(email: str, db: Session = Depends(database.get_db)):
+    user = db.query(models.User).filter(models.User.email == email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Користувача не знайдено")
+    
+    owned = user.owned_trips
+    participating = user.trips
+    all_trips = list(set(owned + participating))
+    
+    result = []
+    for trip in all_trips:
+        result.append({
+            "id": trip.id,
+            "title": trip.title,
+            "destination": trip.destination,
+            "start_date": trip.start_date.isoformat() if trip.start_date else None,
+            "end_date": trip.end_date.isoformat() if trip.end_date else None,
+            "trip_code": trip.trip_code,
+            "has_image": trip.image_blob is not None,
+            "creator_id": trip.creator_id,
+            "creator_email": trip.creator.email, 
+            "participants": [{"email": p.email, "name": p.first_name} for p in trip.participants] 
+        })
+    
+    result.sort(key=lambda x: x["id"], reverse=True)
+    return result
+
+@app.get("/get-trip-image/{trip_id}")
+def get_trip_image(trip_id: int, db: Session = Depends(database.get_db)):
+    trip = db.query(models.Trip).filter(models.Trip.id == trip_id).first()
+    if not trip or not trip.image_blob:
+        raise HTTPException(status_code=404, detail="Фото не знайдено")
+    return Response(content=trip.image_blob, media_type="image/jpeg")
+
+@app.post("/join-trip")
+def join_trip(data: JoinTripRequest, db: Session = Depends(database.get_db)):
+    user = db.query(models.User).filter(models.User.email == data.email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Користувача не знайдено")
+    
+    trip = db.query(models.Trip).filter(models.Trip.trip_code == data.trip_code.upper()).first()
+    if not trip:
+        raise HTTPException(status_code=404, detail="Подорож з таким кодом не знайдено 😔")
+    
+    if trip.creator_id == user.id:
+        raise HTTPException(status_code=400, detail="Ви вже є організатором цієї подорожі 😎")
+        
+    if user in trip.participants:
+        raise HTTPException(status_code=400, detail="Ви вже є учасником цієї подорожі 😉")
+        
+    trip.participants.append(user)
+    db.commit()
+    
+    return {"status": "success", "message": f"Ви успішно приєдналися до: {trip.title}!"}
+
+
+# --- БЕЗПЕКА ТА НАЛАШТУВАННЯ ---
 
 @app.put("/change-password")
 def change_password(data: PasswordChange, db: Session = Depends(database.get_db)):
