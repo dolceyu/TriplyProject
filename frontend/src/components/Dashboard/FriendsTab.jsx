@@ -2,9 +2,6 @@ import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import ConfirmModal from './ConfirmModal'; 
 
-import eyfelImg from "../../assets/eyfel.png";
-import carpathiansImg from "../../assets/carpathians.png";
-
 const FriendsTab = ({ onRequestAccepted }) => {
   const userEmail = localStorage.getItem('userEmail');
   
@@ -193,19 +190,6 @@ const FriendsTab = ({ onRequestAccepted }) => {
 
   return (
     <div className="max-w-7xl mx-auto relative min-h-[90vh]">
-      <img 
-        src={eyfelImg} 
-        alt="" 
-        className="hidden xl:block fixed left-[-50px] bottom-[-28px] w-[450px] h-auto pointer-events-none z-0 opacity-50 blur-[1px] transition-all"
-        style={{ mixBlendMode: 'multiply' }} 
-      />
-      <img 
-        src={carpathiansImg} 
-        alt="" 
-        className="hidden xl:block fixed right-[0px] -bottom-28 w-[850px] h-auto pointer-events-none z-0 opacity-60 blur-[1px]"
-        style={{ mixBlendMode: 'multiply' }}
-      />
-
       <div className="relative z-10">
         <h1 className="text-4xl font-black mb-12 text-black">Мої друзі</h1>
 
