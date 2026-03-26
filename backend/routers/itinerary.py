@@ -20,6 +20,7 @@ def add_location(trip_id: int, location: schemas.LocationCreate, db: Session = D
         lat=location.lat,
         lng=location.lng,
         type=location.type,
+        author_name=location.author_name, 
         votes_for=0,
         votes_against=0,
         status="pending" 
@@ -43,15 +44,12 @@ def delete_location(location_id: int, db: Session = Depends(database.get_db)):
     db.commit()
     return {"status": "success", "message": "Локацію назавжди видалено з бази!"}
 
-# 🔴 ОНОВЛЕНИЙ ЕНДПОІНТ: ТЕПЕР ВІН ПРИЙМАЄ EMAIL І ВМІЄ ЗМІНЮВАТИ ГОЛОС
 @router.put("/locations/{location_id}/vote", response_model=schemas.LocationResponse)
 def vote_location(location_id: int, type: str, email: str, db: Session = Depends(database.get_db)):
-    # 1. Знаходимо юзера
     db_user = db.query(models.User).filter(models.User.email == email).first()
     if not db_user:
         raise HTTPException(status_code=404, detail="Користувача не знайдено")
 
-    # 2. Знаходимо локацію
     db_loc = db.query(models.Location).filter(models.Location.id == location_id).first()
     if not db_loc:
         raise HTTPException(status_code=404, detail="Локацію не знайдено")
@@ -59,18 +57,15 @@ def vote_location(location_id: int, type: str, email: str, db: Session = Depends
     if type not in ['up', 'down']:
         raise HTTPException(status_code=400, detail="Невірний тип голосу")
 
-    # 3. Шукаємо старий голос у журналі
     existing_vote = db.query(models.LocationVote).filter(
         models.LocationVote.location_id == location_id,
         models.LocationVote.user_id == db_user.id
     ).first()
 
     if existing_vote:
-        # Якщо юзер тисне ту саму кнопку вдруге — ігноруємо
         if existing_vote.vote_type == type:
             return db_loc
         
-        # ЮЗЕР ЗМІНЮЄ ГОЛОС: віднімаємо старий і додаємо новий
         if existing_vote.vote_type == 'up':
             db_loc.votes_for -= 1
         elif existing_vote.vote_type == 'down':
@@ -81,11 +76,9 @@ def vote_location(location_id: int, type: str, email: str, db: Session = Depends
         elif type == 'down':
             db_loc.votes_against += 1
         
-        # Оновлюємо тип голосу в журналі
         existing_vote.vote_type = type
 
     else:
-        # ЮЗЕР ГОЛОСУЄ ВПЕРШЕ
         new_vote = models.LocationVote(
             user_id=db_user.id,
             location_id=location_id,
@@ -98,7 +91,6 @@ def vote_location(location_id: int, type: str, email: str, db: Session = Depends
         else:
             db_loc.votes_against += 1
 
-    # 4. Перераховуємо статус
     if db_loc.votes_for == 0 and db_loc.votes_against == 0:
         db_loc.status = "pending"
     elif db_loc.votes_for > db_loc.votes_against:
@@ -106,7 +98,7 @@ def vote_location(location_id: int, type: str, email: str, db: Session = Depends
     elif db_loc.votes_against > db_loc.votes_for:
         db_loc.status = "rejected"
     else:
-        db_loc.status = "pending" # Нічия = очікує
+        db_loc.status = "pending"
 
     db.commit()
     db.refresh(db_loc)

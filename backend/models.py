@@ -2,7 +2,6 @@ from sqlalchemy import Column, Integer, String, JSON, LargeBinary, ForeignKey, T
 from sqlalchemy.orm import relationship
 from database import Base
 
-# Таблиця-зв'язка для Many-to-Many між подорожами та користувачами
 trip_participants = Table(
     "trip_participants",
     Base.metadata,
@@ -24,7 +23,6 @@ class User(Base):
 
     trips = relationship("Trip", secondary=trip_participants, back_populates="participants")
     owned_trips = relationship("Trip", back_populates="creator")
-    # Зв'язок з голосами користувача
     location_votes = relationship("LocationVote", back_populates="user", cascade="all, delete-orphan")
 
 class Friendship(Base):
@@ -46,6 +44,7 @@ class Trip(Base):
     image_blob = Column(LargeBinary, nullable=True)
     trip_code = Column(String, unique=True, index=True) 
     creator_id = Column(Integer, ForeignKey("users.id"))
+    guide_name = Column(String, nullable=True)
     
     creator = relationship("User", back_populates="owned_trips")
     participants = relationship("User", secondary=trip_participants, back_populates="trips")
@@ -63,6 +62,7 @@ class ItineraryItem(Base):
     category = Column(String, default="place") 
     
     trip = relationship("Trip", back_populates="itinerary")
+    day_number = Column(Integer, default=1)
 
 class Location(Base):
     __tablename__ = "locations"
@@ -78,19 +78,17 @@ class Location(Base):
     status = Column(String, default="pending")
 
     trip = relationship("Trip", back_populates="locations")
-    # Зв'язок локації з усіма її голосами
     votes = relationship("LocationVote", back_populates="location", cascade="all, delete-orphan")
+    author_name = Column(String, default="Гість")
 
-# 🔴 НОВА ТАБЛИЦЯ: Журнал голосувань
 class LocationVote(Base):
     __tablename__ = "location_votes"
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     location_id = Column(Integer, ForeignKey("locations.id"), nullable=False)
-    vote_type = Column(String, nullable=False) # 'up' або 'down'
+    vote_type = Column(String, nullable=False) 
 
-    # Унікальне обмеження: 1 юзер може мати лише 1 запис голосу для 1 локації
     __table_args__ = (UniqueConstraint('user_id', 'location_id', name='_user_location_uc'),)
 
     user = relationship("User", back_populates="location_votes")

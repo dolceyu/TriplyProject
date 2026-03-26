@@ -1,5 +1,6 @@
 import json
-from fastapi import FastAPI, Depends, HTTPException, File, UploadFile, Response, Form
+from fastapi import FastAPI, Depends, HTTPException, File, UploadFile, Response, Form, status
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, and_, not_
 import models, database 
@@ -7,6 +8,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from passlib.context import CryptContext 
 from typing import Optional, Dict, List
+import schemas
+from database import get_db
 
 # 🔴 ПІДКЛЮЧАЄМО РОУТЕР
 from routers import itinerary
@@ -375,6 +378,7 @@ def get_trips(email: str, db: Session = Depends(database.get_db)):
             "has_image": trip.image_blob is not None,
             "creator_id": trip.creator_id,
             "creator_email": trip.creator.email, 
+            "guide_name": trip.guide_name,
             "participants": [{"email": p.email, "name": p.first_name} for p in trip.participants] 
         })
     
@@ -409,9 +413,6 @@ def join_trip(data: JoinTripRequest, db: Session = Depends(database.get_db)):
     
     return {"status": "success", "message": f"Ви успішно приєдналися до: {trip.title}!"}
 
-
-# --- БЕЗПЕКА ТА НАЛАШТУВАННЯ ---
-
 @app.put("/change-password")
 def change_password(data: PasswordChange, db: Session = Depends(database.get_db)):
     user = db.query(models.User).filter(models.User.email == data.email).first()
@@ -432,6 +433,62 @@ def delete_account(data: DeleteAccount, db: Session = Depends(database.get_db)):
     db.commit()
     return {"status": "success"}
 
+@app.get("/trips/{trip_id}/itinerary", response_model=list[schemas.ItineraryItemResponse])
+def get_itinerary(trip_id: int, db: Session = Depends(get_db)):
+    """Отримати весь розклад для конкретної подорожі"""
+    items = db.query(models.ItineraryItem).filter(models.ItineraryItem.trip_id == trip_id).all()
+    return items
+
+@app.post("/trips/{trip_id}/itinerary", response_model=schemas.ItineraryItemResponse)
+def create_itinerary_item(trip_id: int, item: schemas.ItineraryItemCreate, db: Session = Depends(get_db)):
+    """Додати нову точку в розклад (з часом і днем)"""
+    db_trip = db.query(models.Trip).filter(models.Trip.id == trip_id).first()
+    if not db_trip:
+        raise HTTPException(status_code=404, detail="Подорож не знайдена")
+        
+    db_item = models.ItineraryItem(**item.model_dump(), trip_id=trip_id) 
+    db.add(db_item)
+    db.commit()
+    db.refresh(db_item)
+    return db_item
+
+@app.delete("/trips/itinerary/{item_id}")
+def delete_itinerary_item(item_id: int, db: Session = Depends(get_db)):
+    """Видалити точку з розкладу"""
+    db_item = db.query(models.ItineraryItem).filter(models.ItineraryItem.id == item_id).first()
+    if not db_item:
+        raise HTTPException(status_code=404, detail="Елемент розкладу не знайдено")
+    
+    db.delete(db_item)
+    db.commit()
+    return {"message": "Успішно видалено"}
+
+@app.patch("/trips/{trip_id}/guide")
+async def update_trip_guide(trip_id: int, guide_data: schemas.GuideUpdate, db: Session = Depends(get_db)):
+    trip = db.query(models.Trip).filter(models.Trip.id == trip_id).first()
+    
+    if not trip:
+        raise HTTPException(status_code=404, detail="Подорож не знайдено")
+
+    if guide_data.guide_name:
+        if trip.guide_name and trip.guide_name != guide_data.guide_name:
+            return JSONResponse(
+                status_code=status.HTTP_409_CONFLICT,
+                content={
+                    "message": "Ой, хтось інший вже став гідом!", 
+                    "current_guide": trip.guide_name
+                }
+            )
+        trip.guide_name = guide_data.guide_name
+    else:
+        trip.guide_name = None
+
+    db.commit()
+    db.refresh(trip)
+    
+    return {"message": "Роль успішно оновлено", "guide_name": trip.guide_name}
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
+
