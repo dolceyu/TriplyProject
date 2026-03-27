@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { ArrowLeft, MapPin, Crown, X, AlertCircle } from 'lucide-react';
+import { ArrowLeft, MapPin, Crown, X, AlertCircle, Ticket } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
 const TripHeader = ({ 
@@ -11,6 +12,7 @@ const TripHeader = ({
 }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [localError, setLocalError] = useState("");
+  const navigate = useNavigate();
 
   const handleBecomeGuide = async () => {
     setIsLoading(true);
@@ -63,6 +65,15 @@ const TripHeader = ({
       </div>
 
       <div className="flex items-center gap-4">
+        
+        {/* 🔴 НОВА КНОПКА БРОНЮВАНЬ */}
+        <button 
+          onClick={() => navigate(`/trip/${trip?.id}/bookings`)}
+          className="flex items-center gap-2 px-4 py-2 bg-white border-2 border-black rounded-xl font-black text-xs uppercase shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:bg-[#93E74F] active:translate-y-0.5 active:shadow-none transition-all"
+        >
+          <Ticket size={14} /> Бронювання та документи
+        </button>
+
         {!guideName ? (
           <button 
             onClick={handleBecomeGuide}
