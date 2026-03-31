@@ -1,5 +1,5 @@
 import React from 'react';
-import { Calendar, Sparkles, Trash2, Clock, Car, Footprints, MapPin } from 'lucide-react';
+import { Calendar, Sparkles, Trash2, Clock, Car, Footprints, MapPin, Wand2 } from 'lucide-react';
 
 const calculateLogistics = (lat1, lon1, lat2, lon2) => {
   if (!lat1 || !lon1 || !lat2 || !lon2) return null;
@@ -20,7 +20,7 @@ const calculateLogistics = (lat1, lon1, lat2, lon2) => {
   };
 };
 
-const ItineraryPanel = ({ sidebarTab, setSidebarTab, itineraryItems = [], locations = [], onDelete, setActiveDayOnMap, activeDayOnMap }) => {
+const ItineraryPanel = ({ sidebarTab, setSidebarTab, itineraryItems = [], locations = [], onDelete, setActiveDayOnMap, activeDayOnMap, onGenerateSmartItinerary }) => {
   const items = Array.isArray(itineraryItems) ? itineraryItems : [];
   const grouped = items.reduce((acc, item) => {
     if (!item) return acc;
@@ -55,16 +55,46 @@ const ItineraryPanel = ({ sidebarTab, setSidebarTab, itineraryItems = [], locati
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-8 pt-0 custom-scrollbar">
-        {sortedDays.length === 0 ? (
+      <div className="flex-1 overflow-y-auto p-8 pt-0 custom-scrollbar relative">
+        
+        {sidebarTab === 'itinerary' && (
+           <div className="mb-8 p-5 bg-gray-900 border border-white/10 rounded-2xl flex items-center justify-between shadow-lg">
+             <div>
+               <h3 className="font-black uppercase text-sm tracking-tight text-white flex items-center gap-2">
+                 <Wand2 size={16} className="text-[#93E74F]" /> Смарт-розподіл
+               </h3>
+               <p className="text-[10px] font-bold text-gray-500 mt-1 uppercase">Оптимізувати логістику</p>
+             </div>
+             <button 
+               onClick={onGenerateSmartItinerary}
+               className="px-4 py-2 bg-[#93E74F] text-black font-black uppercase text-xs rounded-xl shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:translate-y-[2px] hover:shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] active:translate-y-[3px] active:shadow-none transition-all"
+             >
+               Згрупувати ✨
+             </button>
+           </div>
+        )}
+
+        {sidebarTab === 'smart' && (
           <div className="h-full flex flex-col items-center justify-center text-center opacity-30 py-20">
+            <Sparkles size={60} className="mb-4" />
+            <p className="font-bold uppercase tracking-widest text-sm">Тут буде інша фіча</p>
+          </div>
+        )}
+
+        {sidebarTab === 'itinerary' && sortedDays.length === 0 ? (
+          <div className="h-full flex flex-col items-center justify-center text-center opacity-30 py-10">
             <MapPin size={60} className="mb-4" />
             <p className="font-bold uppercase tracking-widest text-sm">Планів поки немає</p>
           </div>
         ) : (
-          sortedDays.map(day => {
+          sidebarTab === 'itinerary' && sortedDays.map(day => {
             const dayNum = parseInt(day);
-            const dayItems = [...grouped[day]].sort((a, b) => (a?.time || "").localeCompare(b?.time || ""));
+            const dayItems = [...grouped[day]].sort((a, b) => {
+               if (!a.time && !b.time) return 0;
+               if (!a.time) return 1;
+               if (!b.time) return -1;
+               return a.time.localeCompare(b.time);
+            });
             const isDayActive = activeDayOnMap === dayNum;
 
             return (
@@ -84,7 +114,7 @@ const ItineraryPanel = ({ sidebarTab, setSidebarTab, itineraryItems = [], locati
                   <div className="flex items-center gap-2">
                     {!isDayActive ? (
                       <span className="text-[9px] font-black text-gray-500 uppercase opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
-                        <Sparkles size={10} /> Побудувати маршрут
+                        <MapPin size={10} /> На карті
                       </span>
                     ) : (
                       <span className="text-[10px] font-black text-[#93E74F] uppercase tracking-widest animate-pulse flex items-center gap-1">
@@ -114,7 +144,7 @@ const ItineraryPanel = ({ sidebarTab, setSidebarTab, itineraryItems = [], locati
                           <div className="flex items-center justify-between gap-4">
                             <h4 className="text-lg font-bold leading-tight truncate uppercase tracking-tight">{item.title}</h4>
                             <div className={`px-3 py-1.5 rounded-xl font-black text-sm flex items-center gap-2 flex-shrink-0 transition-colors ${isDayActive ? 'bg-[#93E74F] text-black shadow-[0_0_15px_rgba(147,231,79,0.4)]' : 'bg-[#93E74F]/10 text-[#93E74F] border border-[#93E74F]/30'}`}>
-                              <Clock size={14} strokeWidth={3}/> {item.time}
+                              <Clock size={14} strokeWidth={3}/> {item.time || "--:--"}
                             </div>
                           </div>
                         </div>

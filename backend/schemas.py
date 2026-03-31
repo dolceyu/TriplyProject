@@ -1,5 +1,6 @@
-from pydantic import BaseModel
-from typing import Optional
+from pydantic import BaseModel, ConfigDict
+from typing import Optional, List
+from datetime import datetime
 
 class TripBase(BaseModel):
     title: str
@@ -12,9 +13,7 @@ class TripResponse(TripBase):
     id: int
     guide_name: Optional[str] = None 
 
-    class Config:
-        from_attributes = True 
-
+    model_config = ConfigDict(from_attributes=True)
 
 class LocationBase(BaseModel):
     name: str
@@ -33,16 +32,14 @@ class LocationResponse(LocationBase):
     votes_against: int
     status: str
 
-    class Config:
-        from_attributes = True 
-
-
+    model_config = ConfigDict(from_attributes=True)
 
 class ItineraryItemBase(BaseModel):
     title: str
     category: str
-    time: str
+    time: Optional[str] = None 
     day_number: int = 1
+    location_id: Optional[int] = None
 
 class ItineraryItemCreate(ItineraryItemBase):
     pass
@@ -51,8 +48,23 @@ class ItineraryItemResponse(ItineraryItemBase):
     id: int
     trip_id: int
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
+
+class TripDocumentBase(BaseModel):
+    category: str
+    title: str
+    item_type: str
+    content: Optional[str] = None 
+
+class TripDocumentCreate(TripDocumentBase):
+    pass
+
+class TripDocumentResponse(TripDocumentBase):
+    id: int
+    trip_id: int
+    created_at: datetime
+    
+    model_config = ConfigDict(from_attributes=True)
 
 
 class GuideUpdate(BaseModel):

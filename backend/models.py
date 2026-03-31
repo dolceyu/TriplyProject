@@ -1,4 +1,5 @@
-from sqlalchemy import Column, Integer, String, JSON, LargeBinary, ForeignKey, Table, Date, Float, UniqueConstraint
+from sqlalchemy import Column, Integer, String, JSON, LargeBinary, ForeignKey, Table, Date, Float, UniqueConstraint, DateTime
+from datetime import datetime
 from sqlalchemy.orm import relationship
 from database import Base
 
@@ -56,13 +57,16 @@ class ItineraryItem(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     trip_id = Column(Integer, ForeignKey("trips.id"))
+    location_id = Column(Integer, ForeignKey("locations.id"), nullable=True) 
+    
     title = Column(String)
     description = Column(String, nullable=True)
     time = Column(String, nullable=True) 
     category = Column(String, default="place") 
+    day_number = Column(Integer, default=1)
     
     trip = relationship("Trip", back_populates="itinerary")
-    day_number = Column(Integer, default=1)
+    location = relationship("Location")
 
 class Location(Base):
     __tablename__ = "locations"
@@ -93,3 +97,14 @@ class LocationVote(Base):
 
     user = relationship("User", back_populates="location_votes")
     location = relationship("Location", back_populates="votes")
+
+class TripDocument(Base):
+    __tablename__ = "trip_documents"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    trip_id = Column(Integer, ForeignKey("trips.id"))
+    category = Column(String) # 'housing', 'transport', 'docs'
+    title = Column(String)
+    item_type = Column(String) # 'link', 'text', 'file'
+    content = Column(String)
+    created_at = Column(DateTime, default=datetime.utcnow)    

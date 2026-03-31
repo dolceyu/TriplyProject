@@ -1,6 +1,7 @@
 import json
 from fastapi import FastAPI, Depends, HTTPException, File, UploadFile, Response, Form, status
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, and_, not_
 import models, database 
@@ -10,9 +11,9 @@ from passlib.context import CryptContext
 from typing import Optional, Dict, List
 import schemas
 from database import get_db
-
-# 🔴 ПІДКЛЮЧАЄМО РОУТЕР
+from clustering import compact_clustering, build_distance_matrix
 from routers import itinerary
+from routers import documents
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -20,16 +21,18 @@ models.Base.metadata.create_all(bind=database.engine)
 
 app = FastAPI(title="Triply API")
 
-# 🔴 АКТИВУЄМО РОУТЕР
-app.include_router(itinerary.router)
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=["*"], 
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+
+app.include_router(documents.router)
+app.include_router(itinerary.router)
 
 class UserCreate(BaseModel):
     first_name: str
@@ -271,8 +274,6 @@ def recommend_friends(email: str, db: Session = Depends(database.get_db)):
     recommendations.sort(key=lambda x: x["score"], reverse=True)
     return recommendations[:4]
 
-# --- НОВІ ЕНДПОЇНТИ ДЛЯ ПОДОРОЖЕЙ ---
-
 @app.post("/create-trip")
 async def create_trip(
     trip_data: str = Form(...), 
@@ -487,6 +488,96 @@ async def update_trip_guide(trip_id: int, guide_data: schemas.GuideUpdate, db: S
     db.refresh(trip)
     
     return {"message": "Роль успішно оновлено", "guide_name": trip.guide_name}
+
+@app.post("/trips/{trip_id}/smart-itinerary")
+def generate_smart_itinerary(trip_id: int, db: Session = Depends(get_db)):
+    trip = db.query(models.Trip).filter(models.Trip.id == trip_id).first()
+    if not trip:
+        raise HTTPException(status_code=404, detail="Подорож не знайдено")
+
+    if trip.start_date and trip.end_date:
+        delta = trip.end_date - trip.start_date
+        total_days_allowed = delta.days + 1
+    else:
+        total_days_allowed = 3
+
+    approved_locations = db.query(models.Location).filter(
+        models.Location.trip_id == trip_id,
+        models.Location.status == "approved" 
+    ).all()
+
+    n_locs = len(approved_locations)
+    if n_locs < 2:
+        raise HTTPException(status_code=400, detail="Потрібно хоча б 2 затверджені локації")
+
+    raw_clusters = compact_clustering(approved_locations, r_preference=2.0)
+    dist_matrix = build_distance_matrix(approved_locations)
+
+    if n_locs <= total_days_allowed:
+        balanced_clusters = [[i] for i in range(n_locs)]
+    else:
+        anchors = [0] 
+        while len(anchors) < total_days_allowed:
+            furthest_idx = -1
+            max_dist = -1
+            for i in range(n_locs):
+                if i in anchors: continue
+                min_dist_to_anchors = min([dist_matrix[i][a] for a in anchors])
+                if min_dist_to_anchors > max_dist:
+                    max_dist = min_dist_to_anchors
+                    furthest_idx = i
+            anchors.append(furthest_idx)
+
+        balanced_clusters = [[] for _ in range(total_days_allowed)]
+        for i in range(n_locs):
+            closest_day = 0
+            min_d = float('inf')
+            for day_idx, anchor_idx in enumerate(anchors):
+                d = dist_matrix[i][anchor_idx]
+                if d < min_d:
+                    min_d = d
+                    closest_day = day_idx
+            balanced_clusters[closest_day].append(i)
+
+    final_daily_routes = []
+    for cluster in balanced_clusters:
+        if not cluster:
+            final_daily_routes.append([])
+            continue
+            
+        unvisited = set(cluster)
+        current = unvisited.pop()
+        route = [current]
+        
+        while unvisited:
+            next_point = min(unvisited, key=lambda x: dist_matrix[current][x])
+            route.append(next_point)
+            unvisited.remove(next_point)
+            current = next_point
+            
+        final_daily_routes.append(route)
+
+    db.query(models.ItineraryItem).filter(
+        models.ItineraryItem.trip_id == trip_id,
+        models.ItineraryItem.location_id.isnot(None)
+    ).delete(synchronize_session=False)
+
+    for day_index, route_indices in enumerate(final_daily_routes):
+        day_number = day_index + 1 
+        for loc_idx in route_indices:
+            loc = approved_locations[loc_idx]
+            new_item = models.ItineraryItem(
+                trip_id=trip_id,
+                location_id=loc.id,
+                title=loc.name,
+                category=loc.type or "place",
+                day_number=day_number,
+                time=None
+            )
+            db.add(new_item)
+
+    db.commit()
+    return {"message": "Створено ідеально збалансований маршрут!"}
 
 if __name__ == "__main__":
     import uvicorn
