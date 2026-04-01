@@ -142,6 +142,37 @@ const TripDetails = ({ trip, onBack }) => {
     } catch (error) { console.error(error); }
   };
 
+  const handleAddFromAI = async (aiPlace) => {
+    try {
+      const query = `${aiPlace.name}, ${trip.destination}`;
+      const geoRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`);
+      const geoData = await geoRes.json();
+      
+      let lat = mapCenter[0];
+      let lng = mapCenter[1];
+      
+      if (geoData && geoData.length > 0) {
+        lat = parseFloat(geoData[0].lat);
+        lng = parseFloat(geoData[0].lon);
+      }
+      
+      const newLocData = {
+        name: aiPlace.name,
+        type: aiPlace.type || 'Локація ШІ',
+        lat: lat,
+        lng: lng,
+        author_name: 'ШІ (' + currentUserName + ')' 
+      };
+
+      const response = await axios.post(`http://localhost:8000/trips/${trip.id}/locations`, newLocData);
+      setLocations([...locations, response.data]); 
+      
+    } catch (error) {
+      console.error("Помилка при додаванні ШІ-локації:", error);
+      throw error; 
+    }
+  };
+  
   const handleVote = async (id, type) => {
     const userEmail = localStorage.getItem('userEmail') || localStorage.getItem('email'); 
     if (!userEmail) return alert("Email не знайдено");
@@ -281,6 +312,7 @@ const TripDetails = ({ trip, onBack }) => {
         </div>
 
         <ItineraryPanel 
+          tripId={trip.id}
           sidebarTab={sidebarTab} 
           setSidebarTab={setSidebarTab} 
           itineraryItems={itineraryItems} 
@@ -289,6 +321,7 @@ const TripDetails = ({ trip, onBack }) => {
           setActiveDayOnMap={setActiveDayOnMap}
           activeDayOnMap={activeDayOnMap}
           onGenerateSmartItinerary={handleGenerateSmartItinerary} 
+          onAddFromAI={handleAddFromAI}
         />
       </div>
 

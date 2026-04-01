@@ -1,5 +1,6 @@
 import React from 'react';
 import { Calendar, Sparkles, Trash2, Clock, Car, Footprints, MapPin, Wand2 } from 'lucide-react';
+import AIPanel from './AIPanel'; 
 
 const calculateLogistics = (lat1, lon1, lat2, lon2) => {
   if (!lat1 || !lon1 || !lat2 || !lon2) return null;
@@ -20,7 +21,11 @@ const calculateLogistics = (lat1, lon1, lat2, lon2) => {
   };
 };
 
-const ItineraryPanel = ({ sidebarTab, setSidebarTab, itineraryItems = [], locations = [], onDelete, setActiveDayOnMap, activeDayOnMap, onGenerateSmartItinerary }) => {
+const ItineraryPanel = ({ 
+  sidebarTab, setSidebarTab, tripId, itineraryItems = [], locations = [], 
+  onDelete, setActiveDayOnMap, activeDayOnMap, onGenerateSmartItinerary,
+  onAddFromAI 
+}) => {
   const items = Array.isArray(itineraryItems) ? itineraryItems : [];
   const grouped = items.reduce((acc, item) => {
     if (!item) return acc;
@@ -37,7 +42,7 @@ const ItineraryPanel = ({ sidebarTab, setSidebarTab, itineraryItems = [], locati
       
       <div className="p-8 pb-4 flex-shrink-0">
         <div className="flex items-center justify-between mb-8">
-          <h2 className="text-2xl font-black uppercase tracking-widest text-[#93E74F] italic">Маршрут</h2>
+          <h2 className="text-2xl font-black uppercase tracking-widest text-[#93E74F]">Маршрут</h2>
           <div className="flex bg-gray-900 rounded-2xl p-1.5 border border-white/10 shadow-inner">
             <button 
               onClick={() => setSidebarTab('itinerary')} 
@@ -49,7 +54,7 @@ const ItineraryPanel = ({ sidebarTab, setSidebarTab, itineraryItems = [], locati
               onClick={() => setSidebarTab('smart')} 
               className={`px-6 py-2 rounded-xl font-black text-xs uppercase transition-all ${sidebarTab === 'smart' ? 'bg-[#93E74F] text-black shadow-lg shadow-[#93E74F]/20' : 'text-gray-500 hover:text-white'}`}
             >
-              AI
+              ШI
             </button>
           </div>
         </div>
@@ -75,10 +80,10 @@ const ItineraryPanel = ({ sidebarTab, setSidebarTab, itineraryItems = [], locati
         )}
 
         {sidebarTab === 'smart' && (
-          <div className="h-full flex flex-col items-center justify-center text-center opacity-30 py-20">
-            <Sparkles size={60} className="mb-4" />
-            <p className="font-bold uppercase tracking-widest text-sm">Тут буде інша фіча</p>
-          </div>
+          <AIPanel 
+            tripId={tripId} 
+            onAddFromAI={onAddFromAI} 
+          /> 
         )}
 
         {sidebarTab === 'itinerary' && sortedDays.length === 0 ? (

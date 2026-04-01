@@ -14,6 +14,7 @@ from database import get_db
 from clustering import compact_clustering, build_distance_matrix
 from routers import itinerary
 from routers import documents
+import ai_routes
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -33,6 +34,7 @@ app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 app.include_router(documents.router)
 app.include_router(itinerary.router)
+app.include_router(ai_routes.router)
 
 class UserCreate(BaseModel):
     first_name: str
