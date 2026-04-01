@@ -1,5 +1,5 @@
 import json
-from fastapi import FastAPI, Depends, HTTPException, File, UploadFile, Response, Form, status
+from fastapi import FastAPI, Depends, HTTPException, File, UploadFile, Response, Form, status, BackgroundTasks
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
@@ -15,6 +15,8 @@ from clustering import compact_clustering, build_distance_matrix
 from routers import itinerary
 from routers import documents
 import ai_routes
+from fastapi import WebSocket, WebSocketDisconnect
+from ws_manager import manager
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -443,7 +445,7 @@ def get_itinerary(trip_id: int, db: Session = Depends(get_db)):
     return items
 
 @app.post("/trips/{trip_id}/itinerary", response_model=schemas.ItineraryItemResponse)
-def create_itinerary_item(trip_id: int, item: schemas.ItineraryItemCreate, db: Session = Depends(get_db)):
+def create_itinerary_item(trip_id: int, item: schemas.ItineraryItemCreate, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     """Додати нову точку в розклад (з часом і днем)"""
     db_trip = db.query(models.Trip).filter(models.Trip.id == trip_id).first()
     if not db_trip:
@@ -453,17 +455,26 @@ def create_itinerary_item(trip_id: int, item: schemas.ItineraryItemCreate, db: S
     db.add(db_item)
     db.commit()
     db.refresh(db_item)
+    
+    background_tasks.add_task(manager.broadcast, {"action": "refresh_locations"}, trip_id)
+    background_tasks.add_task(manager.broadcast, {"action": "refresh_itinerary"}, trip_id)
+    
     return db_item
 
 @app.delete("/trips/itinerary/{item_id}")
-def delete_itinerary_item(item_id: int, db: Session = Depends(get_db)):
+def delete_itinerary_item(item_id: int, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     """Видалити точку з розкладу"""
     db_item = db.query(models.ItineraryItem).filter(models.ItineraryItem.id == item_id).first()
     if not db_item:
         raise HTTPException(status_code=404, detail="Елемент розкладу не знайдено")
     
+    trip_id = db_item.trip_id
     db.delete(db_item)
     db.commit()
+   
+    background_tasks.add_task(manager.broadcast, {"action": "refresh_locations"}, trip_id)
+    background_tasks.add_task(manager.broadcast, {"action": "refresh_itinerary"}, trip_id)
+    
     return {"message": "Успішно видалено"}
 
 @app.patch("/trips/{trip_id}/guide")
@@ -492,7 +503,7 @@ async def update_trip_guide(trip_id: int, guide_data: schemas.GuideUpdate, db: S
     return {"message": "Роль успішно оновлено", "guide_name": trip.guide_name}
 
 @app.post("/trips/{trip_id}/smart-itinerary")
-def generate_smart_itinerary(trip_id: int, db: Session = Depends(get_db)):
+def generate_smart_itinerary(trip_id: int, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     trip = db.query(models.Trip).filter(models.Trip.id == trip_id).first()
     if not trip:
         raise HTTPException(status_code=404, detail="Подорож не знайдено")
@@ -579,9 +590,21 @@ def generate_smart_itinerary(trip_id: int, db: Session = Depends(get_db)):
             db.add(new_item)
 
     db.commit()
+   
+    background_tasks.add_task(manager.broadcast, {"action": "refresh_locations"}, trip_id)
+    background_tasks.add_task(manager.broadcast, {"action": "refresh_itinerary"}, trip_id)
+    
     return {"message": "Створено ідеально збалансований маршрут!"}
+
+@app.websocket("/ws/{trip_id}")
+async def websocket_trip_endpoint(websocket: WebSocket, trip_id: int):
+    await manager.connect(websocket, trip_id)
+    try:
+        while True:
+            data = await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(websocket, trip_id)
 
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
-

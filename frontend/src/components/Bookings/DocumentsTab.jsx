@@ -12,18 +12,61 @@ const DocumentsTab = ({ trip }) => {
 
   const fileInputRef = useRef(null);
 
+  const fetchDocuments = async () => {
+    try {
+      const res = await axios.get(`http://localhost:8000/trips/${trip.id}/documents/docs`);
+      const sorted = res.data.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      setItems(sorted);
+    } catch (err) {
+      console.error("Помилка завантаження документів:", err);
+    }
+  };
+
   useEffect(() => {
-    const fetchDocuments = async () => {
-      try {
-        const res = await axios.get(`http://localhost:8000/trips/${trip.id}/documents/docs`);
-        const sorted = res.data.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-        setItems(sorted);
-      } catch (err) {
-        console.error("Помилка завантаження документів:", err);
-      }
-    };
     if (trip?.id) fetchDocuments();
   }, [trip]);
+
+  useEffect(() => {
+    if (!trip?.id) return;
+
+    const wsUrl = `ws://localhost:8000/ws/${trip.id}`;
+    const socket = new WebSocket(wsUrl);
+
+    socket.onopen = () => {
+      console.log(`Підключено до WebSocket (Документи) для подорожі ${trip.id}`);
+    };
+
+    socket.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        
+        if (data.action === "refresh_documents") {
+          console.log("Хтось змінив документи! Тихо оновлюємо список...");
+          fetchDocuments(); 
+        }
+      } catch (error) {
+        console.error("Помилка обробки повідомлення WebSocket:", error);
+      }
+    };
+
+    socket.onclose = () => {
+      console.log("Відключено від WebSocket (Документи)");
+    };
+
+    return () => {
+      socket.close();
+    };
+  }, [trip?.id]);
+
+  useEffect(() => {
+    if (selectedItem) {
+      const itemStillExists = items.some(item => item.id === selectedItem.id);
+      
+      if (!itemStillExists) {
+        setSelectedItem(null);
+      }
+    }
+  }, [items, selectedItem]);
   
   const handleSubmit = async () => {
     if (!formData.title) return;
@@ -61,6 +104,7 @@ const DocumentsTab = ({ trip }) => {
           data,
           { headers: { 'Content-Type': 'multipart/form-data' } }
         );
+    
         setItems([response.data, ...items]);
         setSelectedItem(response.data);
         setIsModalOpen(false);

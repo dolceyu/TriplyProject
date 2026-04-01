@@ -69,6 +69,45 @@ const TripDetails = ({ trip, onBack }) => {
   }, [trip]);
 
   useEffect(() => {
+    if (!trip?.id) return;
+
+    const wsUrl = `ws://localhost:8000/ws/${trip.id}`;
+    const socket = new WebSocket(wsUrl);
+
+    socket.onopen = () => {
+      console.log(`Підключено до WebSocket для подорожі ${trip.id}`);
+    };
+
+    socket.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        
+        if (data.action === "refresh_locations" || data.action === "refresh_itinerary") {
+          console.log("Отримано сигнал Live-оновлення! Тихо завантажуємо дані...");
+          
+          axios.get(`http://localhost:8000/trips/${trip.id}/locations`)
+            .then(response => setLocations(response.data))
+            .catch(error => console.error("Помилка фонового оновлення локацій:", error));
+
+          axios.get(`http://localhost:8000/trips/${trip.id}/itinerary`)
+            .then(response => setItineraryItems(response.data))
+            .catch(error => console.error("Помилка фонового оновлення розкладу:", error));
+        }
+      } catch (error) {
+        console.error("Помилка обробки повідомлення WebSocket:", error);
+      }
+    };
+
+    socket.onclose = () => {
+      console.log("Відключено від WebSocket");
+    };
+
+    return () => {
+      socket.close();
+    };
+  }, [trip?.id]);
+  
+  useEffect(() => {
     if (trip?.destination) {
       const fetchCoordinates = async () => {
         try {

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException
+from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 from typing import List, Optional
 import shutil
@@ -7,6 +7,9 @@ import models
 import schemas
 from database import get_db
 import re 
+
+# Імпортуємо нашого менеджера сокетів!
+from ws_manager import manager 
 
 router = APIRouter(
     tags=["Сейф документів"]
@@ -22,8 +25,9 @@ def get_secure_filename(filename: str) -> str:
     return f"{clean_name}{ext}"
 
 @router.post("/trips/{trip_id}/documents", response_model=schemas.TripDocumentResponse)
-async def create_document(
+def create_document( # Прибрали async, щоб БД не зависала
     trip_id: int,
+    background_tasks: BackgroundTasks, # Додали фонову задачу
     category: str = Form(...),
     title: str = Form(...),
     item_type: str = Form(...),
@@ -55,6 +59,10 @@ async def create_document(
     db.add(db_doc)
     db.commit()
     db.refresh(db_doc)
+    
+    # КРИЧИМО В СОКЕТ: "Оновіть документи!"
+    background_tasks.add_task(manager.broadcast, {"action": "refresh_documents"}, trip_id)
+    
     return db_doc
 
 @router.get("/trips/{trip_id}/documents/{category}", response_model=List[schemas.TripDocumentResponse])
@@ -65,10 +73,12 @@ def get_documents(trip_id: int, category: str, db: Session = Depends(get_db)):
     ).all()
     
 @router.delete("/documents/{doc_id}")
-def delete_document(doc_id: int, db: Session = Depends(get_db)):
+def delete_document(doc_id: int, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     doc = db.query(models.TripDocument).filter(models.TripDocument.id == doc_id).first()
     if not doc:
         raise HTTPException(status_code=404, detail="Документ не знайдено")
+    
+    trip_id = doc.trip_id # Зберігаємо trip_id перед видаленням
     
     if doc.item_type == 'file' and doc.content:
         file_path = os.path.join(UPLOAD_DIR, doc.content)
@@ -80,12 +90,17 @@ def delete_document(doc_id: int, db: Session = Depends(get_db)):
 
     db.delete(doc)
     db.commit()
+    
+    # Сповіщаємо всіх про видалення
+    background_tasks.add_task(manager.broadcast, {"action": "refresh_documents"}, trip_id)
+    
     return {"status": "success", "message": "Документ видалено"}
 
 @router.patch("/documents/{doc_id}", response_model=schemas.TripDocumentResponse)
-async def update_document(
+def update_document( # Прибрали async
     doc_id: int, 
     doc_update: schemas.TripDocumentCreate, 
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
 ):
     db_doc = db.query(models.TripDocument).filter(models.TripDocument.id == doc_id).first()
@@ -97,6 +112,10 @@ async def update_document(
     
     db.commit()
     db.refresh(db_doc)
+    
+    # Сповіщаємо всіх про оновлення
+    background_tasks.add_task(manager.broadcast, {"action": "refresh_documents"}, db_doc.trip_id)
+    
     return db_doc
 
 @router.get("/trips/{trip_id}")

@@ -13,18 +13,61 @@ const TransportTab = ({ trip }) => {
 
   const fileInputRef = useRef(null);
 
+  const fetchTransport = async () => {
+    try {
+      const res = await axios.get(`http://localhost:8000/trips/${trip.id}/documents/transport`);
+      const sorted = res.data.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      setItems(sorted);
+    } catch (err) {
+      console.error("Помилка завантаження транспорту:", err);
+    }
+  };
+
   useEffect(() => {
-    const fetchTransport = async () => {
-      try {
-        const res = await axios.get(`http://localhost:8000/trips/${trip.id}/documents/transport`);
-        const sorted = res.data.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-        setItems(sorted);
-      } catch (err) {
-        console.error("Помилка завантаження транспорту:", err);
-      }
-    };
     if (trip?.id) fetchTransport();
   }, [trip]);
+
+  useEffect(() => {
+    if (!trip?.id) return;
+
+    const wsUrl = `ws://localhost:8000/ws/${trip.id}`;
+    const socket = new WebSocket(wsUrl);
+
+    socket.onopen = () => {
+      console.log(`Підключено до WebSocket (Транспорт) для подорожі ${trip.id}`);
+    };
+
+    socket.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        
+        if (data.action === "refresh_documents") {
+          console.log("Хтось змінив транспорт! Тихо оновлюємо список...");
+          fetchTransport();
+        }
+      } catch (error) {
+        console.error("Помилка обробки повідомлення WebSocket:", error);
+      }
+    };
+
+    socket.onclose = () => {
+      console.log("Відключено від WebSocket (Транспорт)");
+    };
+
+    return () => {
+      socket.close();
+    };
+  }, [trip?.id]);
+
+  useEffect(() => {
+    if (selectedItem) {
+      const itemStillExists = items.some(item => item.id === selectedItem.id);
+      
+      if (!itemStillExists) {
+        setSelectedItem(null);
+      }
+    }
+  }, [items, selectedItem]);
 
   const handleSubmit = async () => {
     if (!formData.title) return;
@@ -78,7 +121,6 @@ const TransportTab = ({ trip }) => {
     try {
       await axios.delete(`http://localhost:8000/documents/${id}`);
       setItems(items.filter(item => item.id !== id));
-      if (selectedItem?.id === id) setSelectedItem(null);
     } catch (err) { console.error(err); }
   };
 

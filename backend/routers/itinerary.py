@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 from typing import List
 import models, database, schemas 
+from ws_manager import manager 
 
 router = APIRouter(
     prefix="/trips",
@@ -9,7 +10,7 @@ router = APIRouter(
 )
 
 @router.post("/{trip_id}/locations", response_model=schemas.LocationResponse)
-def add_location(trip_id: int, location: schemas.LocationCreate, db: Session = Depends(database.get_db)):
+def add_location(trip_id: int, location: schemas.LocationCreate, background_tasks: BackgroundTasks, db: Session = Depends(database.get_db)):
     db_trip = db.query(models.Trip).filter(models.Trip.id == trip_id).first()
     if not db_trip:
         raise HTTPException(status_code=404, detail="Подорож не знайдена")
@@ -28,6 +29,9 @@ def add_location(trip_id: int, location: schemas.LocationCreate, db: Session = D
     db.add(new_location)
     db.commit()
     db.refresh(new_location)
+    
+    background_tasks.add_task(manager.broadcast, {"action": "refresh_locations"}, trip_id)
+    
     return new_location
 
 @router.get("/{trip_id}/locations", response_model=List[schemas.LocationResponse])
@@ -35,17 +39,22 @@ def get_trip_locations(trip_id: int, db: Session = Depends(database.get_db)):
     return db.query(models.Location).filter(models.Location.trip_id == trip_id).all()
 
 @router.delete("/locations/{location_id}")
-def delete_location(location_id: int, db: Session = Depends(database.get_db)):
+def delete_location(location_id: int, background_tasks: BackgroundTasks, db: Session = Depends(database.get_db)):
     db_loc = db.query(models.Location).filter(models.Location.id == location_id).first()
     if not db_loc:
         raise HTTPException(status_code=404, detail="Локацію не знайдено")
     
+    trip_id = db_loc.trip_id 
+    
     db.delete(db_loc)
     db.commit()
+    
+    background_tasks.add_task(manager.broadcast, {"action": "refresh_locations"}, trip_id)
+    
     return {"status": "success", "message": "Локацію назавжди видалено з бази!"}
 
 @router.put("/locations/{location_id}/vote", response_model=schemas.LocationResponse)
-def vote_location(location_id: int, type: str, email: str, db: Session = Depends(database.get_db)):
+def vote_location(location_id: int, type: str, email: str, background_tasks: BackgroundTasks, db: Session = Depends(database.get_db)):
     db_user = db.query(models.User).filter(models.User.email == email).first()
     if not db_user:
         raise HTTPException(status_code=404, detail="Користувача не знайдено")
@@ -102,5 +111,7 @@ def vote_location(location_id: int, type: str, email: str, db: Session = Depends
 
     db.commit()
     db.refresh(db_loc)
+    
+    background_tasks.add_task(manager.broadcast, {"action": "refresh_locations"}, db_loc.trip_id)
     
     return db_loc
