@@ -209,7 +209,11 @@ const ProfileTab = ({
         <div className={`bg-white rounded-[40px] p-12 shadow-sm flex flex-col gap-8 border-2 transition-all ${isEditingProfile ? 'border-[#A3E635] border-solid' : 'border-gray-100 border-dashed'}`}>
           <div className="flex flex-col gap-2">
             <h2 className="text-3xl font-black text-black">Мій стиль подорожей</h2>
-            <p className="text-gray-500 text-xl font-medium">Виберіть ваші вподобання для ідеальних маршрутів.</p>
+            <p className="text-gray-500 text-xl font-medium">
+              {isEditingProfile 
+                ? "Виберіть ваші вподобання для ідеальних маршрутів." 
+                : "Ваші вподобання для ідеальних маршрутів."}
+            </p>
           </div>
           
           <div className="flex flex-wrap gap-4 mt-2">
