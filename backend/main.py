@@ -384,7 +384,7 @@ def get_trips(email: str, db: Session = Depends(database.get_db)):
             "creator_id": trip.creator_id,
             "creator_email": trip.creator.email, 
             "guide_name": trip.guide_name,
-            "participants": [{"email": p.email, "name": p.first_name} for p in trip.participants] 
+            "participants": [{"email": p.email, "name": p.first_name, "date_of_birth": p.birth_date} for p in trip.participants] 
         })
     
     result.sort(key=lambda x: x["id"], reverse=True)
