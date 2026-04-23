@@ -148,9 +148,6 @@ const ItineraryPanel = ({
                           
                           <div className="flex items-center justify-between gap-4">
                             <h4 className="text-lg font-bold leading-tight truncate uppercase tracking-tight">{item.title}</h4>
-                            <div className={`px-3 py-1.5 rounded-xl font-black text-sm flex items-center gap-2 flex-shrink-0 transition-colors ${isDayActive ? 'bg-[#93E74F] text-black shadow-[0_0_15px_rgba(147,231,79,0.4)]' : 'bg-[#93E74F]/10 text-[#93E74F] border border-[#93E74F]/30'}`}>
-                              <Clock size={14} strokeWidth={3}/> {item.time || "--:--"}
-                            </div>
                           </div>
                         </div>
 

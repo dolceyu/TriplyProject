@@ -6,7 +6,6 @@ import axios from 'axios';
 import TransportTab from '../components/Bookings/TransportTab';
 import HousingTab from '../components/Bookings/HousingTab';
 import DocumentsTab from '../components/Bookings/DocumentsTab';
-import ChecklistsTab from '../components/Bookings/ChecklistsTab';
 
 const BookingsPage = () => {
   const { id } = useParams();
@@ -27,7 +26,6 @@ useEffect(() => {
     { id: 'transport', label: 'Транспорт', icon: <Plane size={16} /> },
     { id: 'housing', label: 'Житло', icon: <Hotel size={16} /> },
     { id: 'docs', label: 'Документи', icon: <FileText size={16} /> },
-    { id: 'checklists', label: 'Чеклисти', icon: <ListTodo size={16} /> },
   ];
 
   const renderTabContent = () => {
@@ -35,7 +33,6 @@ useEffect(() => {
       case 'transport': return <TransportTab trip={currentTrip} />;
       case 'housing': return <HousingTab trip={currentTrip} />;
       case 'docs': return <DocumentsTab trip={currentTrip} />;
-      case 'checklists': return <ChecklistsTab trip={currentTrip} />;
       default: return <TransportTab trip={currentTrip} />;
     }
   };
