@@ -75,7 +75,7 @@ const RegisterPage = () => {
         
         <div className="flex justify-center items-end w-full">
           <div className="relative w-full max-w-[600px]"> 
-            <img src={trioImg} alt="Triply Steps" className="w-full object-contain z-10 mix-blend-multiply" />
+            <img src={trioImg} alt="Triply Steps" className="w-full object-contain z-10 mix-blend-multiply -translate-y-10" />
             <img src={luggageImg} alt="Luggage" className="absolute top-[12%] -left-8 w-28 md:w-36 -rotate-12 z-20 drop-shadow-xl" />
             <img src={ticketImg} alt="Ticket" className="absolute -top-4 -right-2 w-24 md:w-32 rotate-[35deg] z-20 drop-shadow-xl" />
           </div>
