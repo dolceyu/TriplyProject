@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import TripDetails from '../../pages/TripDetails';
+import IncomingInvitations from './IncomingInvitations';
 
 const UserAvatar = ({ email, name, size = "w-8 h-8", textSize = "text-xs", customClass = "" }) => {
   const [imgError, setImgError] = useState(false);
@@ -269,6 +270,8 @@ const TripsTab = () => {
           </button>
         </div>
       </div>
+       
+      <IncomingInvitations onAcceptSuccess={fetchTrips} currentUserEmail={userEmail} />
 
       {isLoadingTrips ? (
         <div className="flex justify-center py-20">

@@ -605,6 +605,207 @@ async def websocket_trip_endpoint(websocket: WebSocket, trip_id: int):
     except WebSocketDisconnect:
         manager.disconnect(websocket, trip_id)
 
+@app.get("/trips/{trip_id}/smart-match")
+def get_smart_matches(trip_id: int, db: Session = Depends(database.get_db)):
+    trip = db.query(models.Trip).filter(models.Trip.id == trip_id).first()
+    if not trip:
+        raise HTTPException(status_code=404, detail="Подорож не знайдено")
+
+    participants = trip.participants
+    if not participants:
+        return {"core_concept": [], "matches": []}
+
+    # 1. ФОРМАЛЬНО-КОНЦЕПТУАЛЬНИЙ АНАЛІЗ: Шукаємо "Стійкий контекст" (Кон'юнкція)
+    # Беремо інтереси першого учасника як базу
+    first_user_prefs = participants[0].preferences or {}
+    common_prefs = set(k for k, v in first_user_prefs.items() if v)
+
+    # Робимо перетин (AND) з інтересами всіх інших учасників
+    for p in participants[1:]:
+        user_prefs = set(k for k, v in (p.preferences or {}).items() if v)
+        common_prefs = common_prefs.intersection(user_prefs)
+
+    # РУХ ПО РЕШІТЦІ (Lattice relaxation): 
+    # Якщо 100% спільних інтересів немає (люди занадто різні), 
+    # ми "послаблюємо" вимоги і беремо те, що подобається хоча б БІЛЬШОСТІ (>50%)
+    if not common_prefs:
+        pref_counts = {}
+        for p in participants:
+            for k, v in (p.preferences or {}).items():
+                if v: 
+                    pref_counts[k] = pref_counts.get(k, 0) + 1
+        
+        threshold = len(participants) / 2
+        common_prefs = set(k for k, count in pref_counts.items() if count > threshold)
+
+    if not common_prefs:
+        return {"core_concept": [], "matches": [], "message": "Група не має спільних інтересів для аналізу."}
+
+    # 2. ПОШУК КАНДИДАТІВ ЗА ЗНАЙДЕНИМ КОНЦЕПТОМ
+    participant_ids = [p.id for p in participants]
+    # Знаходимо всіх, хто ще НЕ в поїздці
+    all_other_users = db.query(models.User).filter(~models.User.id.in_(participant_ids)).all()
+    
+    matched_users = []
+    for u in all_other_users:
+        if not u.preferences:
+            continue
+            
+        user_true_prefs = set(k for k, v in u.preferences.items() if v)
+        
+        # Перевіряємо, чи містить кандидат наш "Стійкий контекст"
+        if common_prefs.issubset(user_true_prefs):
+            
+            # ДОДАНО: Перевіряємо статус інвайту для цього юзера
+            existing_invite = db.query(models.TripInvitation).filter(
+                models.TripInvitation.trip_id == trip_id,
+                models.TripInvitation.invitee_email == u.email
+            ).first()
+
+            # Отримуємо значення статусу (наприклад, "pending", "rejected") або None
+            invite_status = existing_invite.status.value if existing_invite else None
+
+            matched_users.append({
+                "id": u.id,
+                "first_name": u.first_name,
+                "email": u.email,
+                "invite_status": invite_status # Передаємо статус на фронтенд
+            })
+
+    # Словник для гарного виводу тегів на фронтенд
+    labels_map = {
+        "mountains": "⛰️ Гори", "sea": "🌊 Море", "museums": "🏛️ Музеї", 
+        "nature": "🌲 Природа", "foodie": "🍕 Гастрономія", "nightlife": "🪩 Нічне життя", 
+        "shopping": "🛍️ Шопінг", "active": "🏃 Активний відпочинок", 
+        "relax": "🧘 Релакс", "roadtrips": "🚗 Дорожні подорожі"
+    }
+
+    core_concept_labels = [labels_map.get(tag, tag) for tag in common_prefs]
+
+    return {
+        "core_concept": core_concept_labels,
+        "matches": matched_users[:5] # Повертаємо топ-5 ідеальних кандидатів
+    }
+
+from pydantic import BaseModel
+# Переконайся, що імпортував моделі, якщо вони в іншому файлі (наприклад, import models)
+
+# 1. Схема для отримання імейлу з фронтенду
+class InviteSchema(BaseModel):
+    email: str
+
+# 2. Сам ендпоінт
+@app.post("/trips/{trip_id}/invite")
+def send_trip_invitation(
+    trip_id: int, 
+    request: InviteSchema, 
+    db: Session = Depends(database.get_db) # Твоя залежність для бази
+    # current_user: models.User = Depends(get_current_user) # Розкоментуй, якщо використовуєш авторизацію
+):
+    # 1. Перевіряємо, чи існує поїздка
+    trip = db.query(models.Trip).filter(models.Trip.id == trip_id).first()
+    if not trip:
+        raise HTTPException(status_code=404, detail="Подорож не знайдено")
+
+    # 2. ПЕРЕВІРКА НА ДУБЛІКАТИ: чи вже надсилали інвайт цій пошті у цю поїздку?
+    existing_invite = db.query(models.TripInvitation).filter(
+        models.TripInvitation.trip_id == trip_id,
+        models.TripInvitation.invitee_email == request.email
+    ).first()
+
+    if existing_invite:
+        raise HTTPException(status_code=400, detail="Запрошення цій людині вже надіслано!")
+
+    # 3. Визначаємо відправника
+    # Якщо в тебе є current_user, заміни trip.creator_id на current_user.id
+    inviter_id = trip.creator_id 
+
+    # 4. Створюємо запис про запрошення
+    new_invitation = models.TripInvitation(
+        trip_id=trip_id,
+        inviter_id=inviter_id, 
+        invitee_email=request.email,
+        status=models.InvitationStatus.PENDING
+    )
+    
+    db.add(new_invitation)
+    db.commit()
+    
+    return {"message": f"Запрошення для {request.email} надіслано!"}
+
+from pydantic import BaseModel
+
+# Схема для прийняття/відхилення
+class InvitationResponse(BaseModel):
+    action: str  # 'accept' або 'reject'
+
+# 1. Отримуємо інвайти по імейлу (БЕЗ get_current_user)
+@app.get("/users/{email}/invitations")
+def get_my_invitations(email: str, db: Session = Depends(database.get_db)):
+    print(f"ШУКАЮ ІНВАЙТИ ДЛЯ: {email}") # Виведемо в термінал для контролю
+    
+    # 1. Знаходимо ВСІ інвайти для цієї пошти
+    invitations = db.query(models.TripInvitation).filter(
+        models.TripInvitation.invitee_email == email
+    ).all()
+
+    result = []
+    for inv in invitations:
+        # 2. Робимо дуже надійну перевірку статусу (бо Enum іноді глючить)
+        status_str = inv.status.value if hasattr(inv.status, 'value') else str(inv.status)
+        
+        # Якщо це не PENDING - пропускаємо
+        if "PENDING" not in status_str.upper():
+            continue
+
+        # 3. Шукаємо поїздку і гіда
+        trip = db.query(models.Trip).filter(models.Trip.id == inv.trip_id).first()
+        inviter = db.query(models.User).filter(models.User.id == inv.inviter_id).first()
+        
+        # 4. Формуємо результат БЕЗ жорстких перевірок (щоб нічого не губилось)
+        result.append({
+            "id": inv.id,
+            "trip_id": inv.trip_id,
+            "trip_title": trip.title if trip else "Секретна подорож",
+            "trip_destination": trip.destination if trip else "Невідомо де",
+            "inviter_name": f"{inviter.first_name}" if inviter else "Хтось"
+        })
+        
+    print(f"ЗНАЙДЕНО ТА ВІДПРАВЛЕНО НА ФРОНТ: {result}")
+    return result
+
+# 2. Відповідаємо на інвайт (тут теж не треба get_current_user, бо ми знаємо email з самого інвайту)
+@app.post("/invitations/{invitation_id}/respond")
+def respond_to_invitation(
+    invitation_id: int, 
+    response: InvitationResponse,
+    db: Session = Depends(database.get_db)
+):
+    invitation = db.query(models.TripInvitation).filter(
+        models.TripInvitation.id == invitation_id
+    ).first()
+
+    if not invitation:
+        raise HTTPException(status_code=404, detail="Запрошення не знайдено")
+
+    if response.action == 'accept':
+        invitation.status = models.InvitationStatus.ACCEPTED
+        
+        trip = db.query(models.Trip).filter(models.Trip.id == invitation.trip_id).first()
+        # Шукаємо юзера по імейлу, який записаний у самому інвайті!
+        invited_user = db.query(models.User).filter(models.User.email == invitation.invitee_email).first()
+        
+        if trip and invited_user and invited_user not in trip.participants:
+            trip.participants.append(invited_user)
+            
+    elif response.action == 'reject':
+        invitation.status = models.InvitationStatus.REJECTED
+    else:
+        raise HTTPException(status_code=400, detail="Дія має бути 'accept' або 'reject'")
+
+    db.commit()
+    return {"message": f"Запрошення успішно оновлено: {response.action}"}
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)

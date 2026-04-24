@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
-import { ArrowLeft, MapPin, Crown, X, AlertCircle, Ticket } from 'lucide-react';
+import { ArrowLeft, MapPin, Crown, X, AlertCircle, Ticket, Users, Sparkles } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+
+import SmartMatchModal from './SmartMatchModal'; 
 
 const TripHeader = ({ 
   trip, 
@@ -13,6 +15,9 @@ const TripHeader = ({
   const [isLoading, setIsLoading] = useState(false);
   const [localError, setLocalError] = useState("");
   const [showBirthdayBanner, setShowBirthdayBanner] = useState(true);
+  
+  const [isMatchModalOpen, setIsMatchModalOpen] = useState(false); 
+  
   const navigate = useNavigate();
 
   const handleBecomeGuide = async () => {
@@ -127,6 +132,15 @@ const TripHeader = ({
             </div>
           )}
 
+          {guideName === currentUserName && (
+            <button 
+              onClick={() => setIsMatchModalOpen(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-black text-[#93E74F] border-2 border-black rounded-xl font-black text-xs uppercase shadow-[2px_2px_0px_0px_rgba(0,0,0,0.5)] hover:bg-gray-800 transition-all active:translate-y-0.5 active:shadow-none"
+            >
+              <Sparkles size={14} /> ІДЕАЛЬНА КОМПАНІЯ
+            </button>
+          )}
+
           <div className="w-10 h-10 rounded-full border-2 border-black bg-[#93E74F] flex items-center justify-center font-bold text-xs uppercase shadow-sm">
             {currentUserName?.charAt(0)}
           </div>
@@ -147,6 +161,12 @@ const TripHeader = ({
           </button>
         </div>
       )}
+
+      <SmartMatchModal 
+        isOpen={isMatchModalOpen} 
+        onClose={() => setIsMatchModalOpen(false)} 
+        tripId={trip?.id} 
+      />
     </div>
   );
 };

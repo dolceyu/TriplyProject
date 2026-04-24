@@ -1,7 +1,15 @@
-from sqlalchemy import Column, Integer, String, JSON, LargeBinary, ForeignKey, Table, Date, Float, UniqueConstraint, DateTime
+import enum
+from sqlalchemy import Column, Integer, String, JSON, LargeBinary, ForeignKey, Table, Date, Float, UniqueConstraint, DateTime, Enum
 from datetime import datetime
+from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from database import Base
+
+# --- ДОДАНО: Енам для статусів запрошення ---
+class InvitationStatus(enum.Enum):
+    PENDING = "pending"
+    ACCEPTED = "accepted"
+    REJECTED = "rejected"
 
 trip_participants = Table(
     "trip_participants",
@@ -51,6 +59,8 @@ class Trip(Base):
     participants = relationship("User", secondary=trip_participants, back_populates="trips")
     itinerary = relationship("ItineraryItem", back_populates="trip", cascade="all, delete-orphan")
     locations = relationship("Location", back_populates="trip", cascade="all, delete-orphan")
+    # ДОДАНО: Зв'язок із запрошеннями
+    invitations = relationship("TripInvitation", back_populates="trip", cascade="all, delete-orphan")
 
 class ItineraryItem(Base):
     __tablename__ = "itinerary_items"
@@ -108,3 +118,16 @@ class TripDocument(Base):
     item_type = Column(String) # 'link', 'text', 'file'
     content = Column(String)
     created_at = Column(DateTime, default=datetime.utcnow)    
+
+# --- ДОДАНО: Таблиця для збереження інвайтів ФКА ---
+class TripInvitation(Base):
+    __tablename__ = "trip_invitations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    trip_id = Column(Integer, ForeignKey("trips.id"))
+    inviter_id = Column(Integer, ForeignKey("users.id")) # Хто надіслав
+    invitee_email = Column(String) # Кому надіслали (кандидат)
+    status = Column(Enum(InvitationStatus), default=InvitationStatus.PENDING)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    trip = relationship("Trip", back_populates="invitations")
