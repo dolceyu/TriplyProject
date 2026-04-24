@@ -35,17 +35,20 @@ Triply — це сучасний веб-додаток для організац
 ## Як запустити проєкт
 
 ### 1. Backend
+```bash
 cd backend
 python -m venv venv
 source venv/scripts/activate  # для Windows
 pip install -r requirements.txt
 uvicorn main:app --reload
+```
 
 ### 2. Frontend
+```bash
 cd frontend
 npm install
 npm run dev
-
+```
 ---
 
 ## Автор
