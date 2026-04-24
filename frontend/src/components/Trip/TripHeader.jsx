@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { ArrowLeft, MapPin, Crown, X, AlertCircle, Ticket, Users, Sparkles } from 'lucide-react';
+import { ArrowLeft, MapPin, AlertCircle, Ticket, Sparkles, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import toast from 'react-hot-toast';
 
 import SmartMatchModal from './SmartMatchModal'; 
 
@@ -15,15 +16,70 @@ const TripHeader = ({
   const [isLoading, setIsLoading] = useState(false);
   const [localError, setLocalError] = useState("");
   const [showBirthdayBanner, setShowBirthdayBanner] = useState(true);
-  
   const [isMatchModalOpen, setIsMatchModalOpen] = useState(false); 
   
   const navigate = useNavigate();
 
+  const currentUserEmail = localStorage.getItem('userEmail')?.replace(/['"]+/g, '').trim().toLowerCase();
+  const isCreator = trip?.creator_email && currentUserEmail && trip.creator_email.toLowerCase() === currentUserEmail;
+
+  const handleLeaveClick = () => {
+    toast((t) => (
+      <div className="flex flex-col gap-3 p-1">
+        <span className="font-bold text-sm text-center text-black">Ви точно хочете покинути цю подорож? 😢</span>
+        <div className="flex justify-center gap-3 mt-2">
+          <button
+            onClick={() => {
+              toast.dismiss(t.id);
+              executeLeave();
+            }}
+            className="px-4 py-2 bg-red-500 text-white border-2 border-black rounded-xl font-black text-xs hover:bg-red-600 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 active:shadow-none transition-all"
+          >
+            ТАК, ВИЙТИ
+          </button>
+          <button
+            onClick={() => toast.dismiss(t.id)}
+            className="px-4 py-2 bg-gray-100 text-black border-2 border-black rounded-xl font-black text-xs hover:bg-gray-200 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 active:shadow-none transition-all"
+          >
+            СКАСУВАТИ
+          </button>
+        </div>
+      </div>
+    ), { duration: 10000, position: 'top-center' }); 
+  };
+
+  const executeLeave = async () => {
+    setIsLoading(true);
+    try {
+      const res = await fetch(`http://127.0.0.1:8000/leave-trip`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: currentUserEmail, trip_id: trip.id })
+      });
+      
+      if (res.ok) {
+        toast.success("Ви успішно покинули подорож 👋");
+        
+        localStorage.removeItem('currentTrip');
+        
+        setTimeout(() => {
+          navigate('/'); 
+        }, 1500);
+      } else {
+        const error = await res.json();
+        toast.error(error.detail || "Помилка при виході");
+      }
+    } catch (err) {
+      toast.error("Сервер не відповідає");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
   const handleBecomeGuide = async () => {
     setIsLoading(true);
     try {
-      await axios.patch(`http://localhost:8000/trips/${trip.id}/guide`, { guide_name: currentUserName });
+      await axios.patch(`http://127.0.0.1:8000/trips/${trip.id}/guide`, { guide_name: currentUserName });
       setGuideName(currentUserName); 
     } catch (error) {
       if (error.response && error.response.status === 409) {
@@ -41,7 +97,7 @@ const TripHeader = ({
   const handleResignGuide = async () => {
     setIsLoading(true);
     try {
-      await axios.patch(`http://localhost:8000/trips/${trip.id}/guide`, { guide_name: null });
+      await axios.patch(`http://127.0.0.1:8000/trips/${trip.id}/guide`, { guide_name: null });
       setGuideName(null); 
     } catch (error) {
       console.error("Помилка відміни ролі:", error);
@@ -62,7 +118,6 @@ const TripHeader = ({
 
   const getBirthdayFriends = () => {
     if (!trip?.participants || !trip?.start_date || !trip?.end_date) return [];
-
     const start = parseDate(trip.start_date);
     const end = parseDate(trip.end_date);
     if (!start || !end) return [];
@@ -80,10 +135,7 @@ const TripHeader = ({
         
         if (bdayThisYear >= start && bdayThisYear <= end) {
           const day = dob.getDate();
-          const monthNames = [
-            "січня", "лютого", "березня", "квітня", "травня", "червня",
-            "липня", "серпня", "вересня", "жовтня", "листопада", "грудня"
-          ];
+          const monthNames = ["січня", "лютого", "березня", "квітня", "травня", "червня", "липня", "серпня", "вересня", "жовтня", "листопада", "грудня"];
           const formattedDate = `${day} ${monthNames[dob.getMonth()]}`;
           return { name: person.name || person.first_name, date: formattedDate };
         }
@@ -138,6 +190,17 @@ const TripHeader = ({
               className="flex items-center gap-2 px-4 py-2 bg-black text-[#93E74F] border-2 border-black rounded-xl font-black text-xs uppercase shadow-[2px_2px_0px_0px_rgba(0,0,0,0.5)] hover:bg-gray-800 transition-all active:translate-y-0.5 active:shadow-none"
             >
               <Sparkles size={14} /> ІДЕАЛЬНА КОМПАНІЯ
+            </button>
+          )}
+
+          {!isCreator && (
+            <button 
+              onClick={handleLeaveClick}
+              disabled={isLoading}
+              className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white hover:bg-red-600 border-2 border-black rounded-xl font-black text-xs uppercase shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 active:shadow-none transition-all disabled:opacity-50"
+              title="Покинути подорож"
+            >
+              🚪 Вийти
             </button>
           )}
 
