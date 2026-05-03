@@ -36,6 +36,7 @@ const TripsTab = () => {
     const saved = localStorage.getItem('currentTrip');
     return saved ? JSON.parse(saved) : null;
   });
+
   useEffect(() => {
     if (selectedTrip) {
       localStorage.setItem('currentTrip', JSON.stringify(selectedTrip));
@@ -60,6 +61,8 @@ const TripsTab = () => {
   
   const [tripCode, setTripCode] = useState('');
   const [joinCodeInput, setJoinCodeInput] = useState(''); 
+
+  const [activeTooltip, setActiveTooltip] = useState(null);
 
   const generateCode = () => {
     return Math.random().toString(36).substring(2, 8).toUpperCase();
@@ -247,6 +250,15 @@ const TripsTab = () => {
     });
   };
 
+  const handleAvatarClick = (e, identifier) => {
+    e.stopPropagation(); 
+    if (activeTooltip === identifier) {
+      setActiveTooltip(null); 
+    } else {
+      setActiveTooltip(identifier); 
+    }
+  };
+
   if (selectedTrip) {
     return <TripDetails trip={selectedTrip} onBack={() => setSelectedTrip(null)} />;
   }
@@ -358,15 +370,29 @@ const TripsTab = () => {
                           const pEmail = typeof p === 'string' ? p : p.email;
                           const pName = typeof p === 'string' ? p : p.name;
                           
+                          const tooltipId = `${trip.id}-${pEmail}`;
+
                           return (
-                            <div key={index} title={pName} className="relative z-10">
+                            <div 
+                              key={index} 
+                              className="relative z-10 cursor-pointer"
+                              onClick={(e) => handleAvatarClick(e, tooltipId)}
+                            >
                                <UserAvatar 
                                  email={pEmail} 
                                  name={pName} 
                                  size="w-7 h-7" 
                                  textSize="text-[10px]" 
-                                 customClass="border-2 border-white"
+                                 customClass="border-2 border-white hover:scale-110 transition-transform"
                                />
+
+                               {activeTooltip === tooltipId && (
+                                 <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-max px-3 py-2 bg-black text-white text-xs rounded-xl shadow-lg z-50">
+                                   <p className="font-bold">{pName}</p>
+                                   <p className="text-gray-300">{pEmail}</p>
+                                   <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-black"></div>
+                                 </div>
+                               )}
                             </div>
                           );
                         })}

@@ -49,7 +49,7 @@ useEffect(() => {
           </button>
           <div>
             <h1 className="text-2xl font-black uppercase tracking-tight">Сейф документів</h1>
-            <p className="text-sm font-bold text-gray-400">Всі квитки, броні та чеклисти в одному місці</p>
+            <p className="text-sm font-bold text-gray-400">Всі квитки та броні в одному місці</p>
           </div>
         </div>
       </header>

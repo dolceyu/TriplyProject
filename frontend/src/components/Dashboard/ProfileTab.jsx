@@ -185,7 +185,7 @@ const ProfileTab = ({
                   </div>
 
                   <div className="flex flex-col gap-3 opacity-60 cursor-not-allowed">
-                    <label className="font-bold text-gray-400 text-lg ml-2 uppercase tracking-wide">Електронна пошта (не змінюється)</label>
+                    <label className="font-bold text-gray-400 text-lg ml-2 uppercase tracking-wide">Електронна пошта</label>
                     <div className="px-6 py-5 text-xl font-bold rounded-[25px] bg-gray-200 border-2 border-transparent text-gray-500 shadow-inner">
                       {userEmail}
                     </div>
