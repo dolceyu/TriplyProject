@@ -115,7 +115,8 @@ class TripDocument(Base):
     title = Column(String)
     item_type = Column(String) # 'link', 'text', 'file'
     content = Column(String)
-    created_at = Column(DateTime, default=datetime.utcnow)    
+    author_name = Column(String, nullable=True, default="Гість") 
+    created_at = Column(DateTime, default=datetime.utcnow) 
 
 class TripInvitation(Base):
     __tablename__ = "trip_invitations"

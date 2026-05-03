@@ -8,7 +8,6 @@ import schemas
 from database import get_db
 import re 
 
-# Імпортуємо нашого менеджера сокетів!
 from ws_manager import manager 
 
 router = APIRouter(
@@ -25,12 +24,13 @@ def get_secure_filename(filename: str) -> str:
     return f"{clean_name}{ext}"
 
 @router.post("/trips/{trip_id}/documents", response_model=schemas.TripDocumentResponse)
-def create_document( # Прибрали async, щоб БД не зависала
+def create_document( 
     trip_id: int,
-    background_tasks: BackgroundTasks, # Додали фонову задачу
+    background_tasks: BackgroundTasks, 
     category: str = Form(...),
     title: str = Form(...),
     item_type: str = Form(...),
+    author_name: str = Form(...),
     content: Optional[str] = Form(None),
     file: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db)
@@ -53,14 +53,14 @@ def create_document( # Прибрали async, щоб БД не зависала
         category=category,
         title=title,
         item_type=item_type,
-        content=final_content
+        content=final_content,
+        author_name=author_name
     )
     
     db.add(db_doc)
     db.commit()
     db.refresh(db_doc)
     
-    # КРИЧИМО В СОКЕТ: "Оновіть документи!"
     background_tasks.add_task(manager.broadcast, {"action": "refresh_documents"}, trip_id)
     
     return db_doc
@@ -73,12 +73,16 @@ def get_documents(trip_id: int, category: str, db: Session = Depends(get_db)):
     ).all()
     
 @router.delete("/documents/{doc_id}")
-def delete_document(doc_id: int, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+def delete_document(doc_id: int, user_name: str, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     doc = db.query(models.TripDocument).filter(models.TripDocument.id == doc_id).first()
     if not doc:
         raise HTTPException(status_code=404, detail="Документ не знайдено")
     
-    trip_id = doc.trip_id # Зберігаємо trip_id перед видаленням
+    trip = db.query(models.Trip).filter(models.Trip.id == doc.trip_id).first()
+    if doc.author_name != user_name and trip.guide_name != user_name:
+        raise HTTPException(status_code=403, detail="Ви не маєте прав для видалення цього документа")
+    
+    trip_id = doc.trip_id 
     
     if doc.item_type == 'file' and doc.content:
         file_path = os.path.join(UPLOAD_DIR, doc.content)
@@ -90,14 +94,13 @@ def delete_document(doc_id: int, background_tasks: BackgroundTasks, db: Session 
 
     db.delete(doc)
     db.commit()
-    
-    # Сповіщаємо всіх про видалення
+   
     background_tasks.add_task(manager.broadcast, {"action": "refresh_documents"}, trip_id)
     
     return {"status": "success", "message": "Документ видалено"}
 
 @router.patch("/documents/{doc_id}", response_model=schemas.TripDocumentResponse)
-def update_document( # Прибрали async
+def update_document( 
     doc_id: int, 
     doc_update: schemas.TripDocumentCreate, 
     background_tasks: BackgroundTasks,
@@ -113,7 +116,6 @@ def update_document( # Прибрали async
     db.commit()
     db.refresh(db_doc)
     
-    # Сповіщаємо всіх про оновлення
     background_tasks.add_task(manager.broadcast, {"action": "refresh_documents"}, db_doc.trip_id)
     
     return db_doc

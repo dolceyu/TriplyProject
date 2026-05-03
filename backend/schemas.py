@@ -55,6 +55,7 @@ class TripDocumentBase(BaseModel):
     title: str
     item_type: str
     content: Optional[str] = None 
+    author_name: Optional[str] = "Гість"
 
 class TripDocumentCreate(TripDocumentBase):
     pass

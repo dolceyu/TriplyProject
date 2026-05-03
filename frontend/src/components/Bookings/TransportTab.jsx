@@ -1,8 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
-import { Plus, Link as LinkIcon, FileText, AlignLeft, ExternalLink, Plane, X, Download, Trash2, Pencil } from 'lucide-react';
+import { Plus, Link as LinkIcon, FileText, AlignLeft, ExternalLink, X, Download, Trash2, Pencil } from 'lucide-react';
 
 const TransportTab = ({ trip }) => {
+  const currentUserName = (localStorage.getItem('userName') || localStorage.getItem('user_name') || '')
+    .replace(/['"]+/g, '')
+    .trim();
+
   const [items, setItems] = useState([]);
   const [selectedItem, setSelectedItem] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -29,43 +33,23 @@ const TransportTab = ({ trip }) => {
 
   useEffect(() => {
     if (!trip?.id) return;
-
     const wsUrl = `ws://localhost:8000/ws/${trip.id}`;
     const socket = new WebSocket(wsUrl);
-
-    socket.onopen = () => {
-      console.log(`Підключено до WebSocket (Транспорт) для подорожі ${trip.id}`);
-    };
-
     socket.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        
-        if (data.action === "refresh_documents") {
-          console.log("Хтось змінив транспорт! Тихо оновлюємо список...");
-          fetchTransport();
-        }
+        if (data.action === "refresh_documents") fetchTransport();
       } catch (error) {
-        console.error("Помилка обробки повідомлення WebSocket:", error);
+        console.error("WS error:", error);
       }
     };
-
-    socket.onclose = () => {
-      console.log("Відключено від WebSocket (Транспорт)");
-    };
-
-    return () => {
-      socket.close();
-    };
+    return () => socket.close();
   }, [trip?.id]);
 
   useEffect(() => {
     if (selectedItem) {
       const itemStillExists = items.some(item => item.id === selectedItem.id);
-      
-      if (!itemStillExists) {
-        setSelectedItem(null);
-      }
+      if (!itemStillExists) setSelectedItem(null);
     }
   }, [items, selectedItem]);
 
@@ -84,14 +68,13 @@ const TransportTab = ({ trip }) => {
         setSelectedItem(response.data);
         setIsModalOpen(false);
         resetForm();
-      } catch (error) {
-        console.error(error);
-      }
+      } catch (error) { console.error(error); }
     } else {
       const data = new FormData();
       data.append('category', 'transport'); 
       data.append('title', formData.title);
       data.append('item_type', activeTab);
+      data.append('author_name', currentUserName); 
       
       if (activeTab === 'file' && selectedFile) {
         data.append('file', selectedFile);
@@ -109,9 +92,7 @@ const TransportTab = ({ trip }) => {
         setSelectedItem(response.data);
         setIsModalOpen(false);
         resetForm();
-      } catch (error) {
-        console.error(error);
-      }
+      } catch (error) { console.error(error); }
     }
   };
 
@@ -119,9 +100,13 @@ const TransportTab = ({ trip }) => {
     e.stopPropagation();
     if (!window.confirm("Видалити цей квиток/маршрут?")) return;
     try {
-      await axios.delete(`http://localhost:8000/documents/${id}`);
+      await axios.delete(`http://localhost:8000/documents/${id}`, {
+        params: { user_name: currentUserName }
+      });
       setItems(items.filter(item => item.id !== id));
-    } catch (err) { console.error(err); }
+    } catch (err) { 
+      alert(err.response?.data?.detail || "Помилка видалення");
+    }
   };
 
   const resetForm = () => {
@@ -143,44 +128,50 @@ const TransportTab = ({ trip }) => {
   return (
     <div className="flex-1 flex w-full gap-6 font-sans text-black pb-4 pr-3 min-h-0">
       <div className="w-1/2 flex flex-col bg-white border-4 border-black rounded-3xl shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden">
-        <div className="p-6 border-b-4 border-black flex justify-between items-center bg-gray-50">
-          <h2 className="font-black text-xl uppercase tracking-widest flex items-center gap-2 text-black">
-            ✈️ Транспорт
-          </h2>
-          <span className="bg-[#93E74F] text-black text-[10px] px-2 py-1 rounded-lg font-black border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] text-black">
+        <div className="p-6 border-b-4 border-black flex justify-between items-center bg-gray-50 text-black">
+          <h2 className="font-black text-xl uppercase tracking-widest flex items-center gap-2">✈️ Транспорт</h2>
+          <span className="bg-[#93E74F] text-[10px] px-2 py-1 rounded-lg font-black border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
             {items.length} ЗАПИСІВ
           </span>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-6 bg-white flex flex-col gap-4">
-          {items.map(item => (
-            <button
-              key={item.id}
-              onClick={() => setSelectedItem(item)}
-              className={`group relative w-full text-left p-4 rounded-2xl border-2 transition-all flex items-center gap-4 ${
-                selectedItem?.id === item.id 
-                  ? 'bg-[#93E74F]/10 border-[#93E74F] shadow-[4px_4px_0px_0px_rgba(147,231,79,1)] translate-x-1' 
-                  : 'bg-white border-black hover:bg-gray-50 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]'
-              }`}
-            >
-              <div onClick={(e) => handleDelete(e, item.id)} className="absolute -top-2 -left-2 w-7 h-7 bg-white border-2 border-black rounded-full flex items-center justify-center text-red-500 opacity-0 group-hover:opacity-100 transition-all shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] z-10">
-                <Trash2 size={12} />
-              </div>
-              <div className={`w-10 h-10 rounded-xl flex items-center justify-center border-2 border-black ${selectedItem?.id === item.id ? 'bg-[#93E74F]' : 'bg-gray-100'}`}>
-                {item.item_type === 'link' ? <LinkIcon size={18}/> : item.item_type === 'text' ? <AlignLeft size={18}/> : <FileText size={18}/>}
-              </div>
-              <div className="flex-1 overflow-hidden text-black">
-                <h4 className="font-black text-sm uppercase truncate">{item.title}</h4>
-                <p className="text-[10px] font-bold text-gray-500 uppercase mt-1">Квиток/Маршрут</p>
-              </div>
-            </button>
-          ))}
+        <div className="flex-1 overflow-y-auto p-6 bg-white flex flex-col gap-4 text-black">
+          {items.map(item => {
+            const isAuthor = item.author_name === currentUserName;
+            const isGuide = trip?.guide_name === currentUserName;
+            const canDelete = isAuthor || isGuide;
+
+            return (
+              <button
+                key={item.id}
+                onClick={() => setSelectedItem(item)}
+                className={`group relative w-full text-left p-4 rounded-2xl border-2 transition-all flex items-center gap-4 ${
+                  selectedItem?.id === item.id 
+                    ? 'bg-[#93E74F]/10 border-[#93E74F] shadow-[4px_4px_0px_0px_rgba(147,231,79,1)] translate-x-1' 
+                    : 'bg-white border-black hover:bg-gray-50 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]'
+                }`}
+              >
+                {canDelete && (
+                  <div onClick={(e) => handleDelete(e, item.id)} className="absolute -top-2 -left-2 w-7 h-7 bg-white border-2 border-black rounded-full flex items-center justify-center text-red-500 opacity-0 group-hover:opacity-100 transition-all shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] z-10">
+                    <Trash2 size={12} />
+                  </div>
+                )}
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center border-2 border-black ${selectedItem?.id === item.id ? 'bg-[#93E74F]' : 'bg-gray-100'}`}>
+                  {item.item_type === 'link' ? <LinkIcon size={18}/> : item.item_type === 'text' ? <AlignLeft size={18}/> : <FileText size={18}/>}
+                </div>
+                <div className="flex-1 overflow-hidden">
+                  <h4 className="font-black text-sm uppercase truncate">{item.title}</h4>
+                  <p className="text-[9px] font-bold text-gray-400 uppercase mt-1">Додав: {item.author_name || 'Гість'}</p>
+                </div>
+              </button>
+            );
+          })}
         </div>
 
         <div className="p-6 border-t-4 border-black bg-white">
           <button 
             onClick={() => { resetForm(); setIsModalOpen(true); }}
-            className="w-full py-4 bg-[#93E74F] text-black border-4 border-black rounded-xl font-black text-sm uppercase shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:translate-y-1 active:shadow-none transition-all flex items-center justify-center gap-2"
+            className="w-full py-4 bg-[#93E74F] text-black border-4 border-black rounded-xl font-black text-sm uppercase shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:translate-y-1 transition-all flex items-center justify-center gap-2"
           >
             <Plus size={20} /> Додати квиток
           </button>
@@ -191,24 +182,44 @@ const TransportTab = ({ trip }) => {
         {selectedItem ? (
           <div className="flex-1 bg-white border-4 border-black rounded-2xl m-4 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] flex flex-col overflow-hidden text-black">
              <div className="p-6 border-b-4 border-black flex items-center justify-between bg-[#93E74F]/20">
-                <h2 className="text-xl font-black uppercase truncate text-black">{selectedItem.title}</h2>
+                <h2 className="text-xl font-black uppercase truncate">{selectedItem.title}</h2>
                 <div className="flex gap-2">
-                   <button onClick={() => { setFormData({title: selectedItem.title, content: selectedItem.content}); setIsEditing(true); setIsModalOpen(true); }} className="p-2 border-2 border-black rounded-lg hover:bg-[#93E74F] transition-colors text-black"><Pencil size={16}/></button>
+                   {(selectedItem.author_name === currentUserName || trip?.guide_name === currentUserName) && (
+                     <button onClick={() => { setFormData({title: selectedItem.title, content: selectedItem.content}); setIsEditing(true); setIsModalOpen(true); }} className="p-2 border-2 border-black rounded-lg hover:bg-[#93E74F] transition-colors"><Pencil size={16}/></button>
+                   )}
                    {selectedItem.item_type === 'file' && <a href={getFileUrl(selectedItem.content)} download className="p-2 border-2 border-black rounded-lg bg-black text-[#93E74F]"><Download size={16}/></a>}
                 </div>
              </div>
-             <div className="flex-1 overflow-hidden bg-white">
+             
+             <div className="flex-1 overflow-auto bg-white p-8">
                 {selectedItem.item_type === 'file' ? (
                    selectedItem.content.toLowerCase().endsWith('.pdf') ? 
                    <iframe src={getFileUrl(selectedItem.content)} className="w-full h-full border-none" /> : 
-                   <div className="p-4 flex justify-center h-full items-center bg-gray-100"><img src={getFileUrl(selectedItem.content)} className="max-h-full border-4 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]" /></div>
+                   <div className="flex justify-center h-full items-center"><img src={getFileUrl(selectedItem.content)} className="max-h-full border-4 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]" alt="preview" /></div>
+                ) : selectedItem.item_type === 'link' ? (
+                   <div className="p-8 text-center mt-10">
+                      <p className="font-bold text-gray-500 mb-6 italic">Посилання на квиток або маршрут:</p>
+                      <div className="flex flex-col items-center gap-6">
+                        <a href={selectedItem.content} target="_blank" rel="noopener noreferrer" className="text-blue-600 font-bold underline break-all hover:text-blue-800 text-sm">
+                          {selectedItem.content}
+                        </a>
+                        <a 
+                          href={selectedItem.content} 
+                          target="_blank" 
+                          rel="noopener noreferrer" 
+                          className="inline-flex items-center gap-2 px-8 py-4 bg-black text-[#93E74F] border-4 border-black rounded-xl font-black uppercase shadow-[6px_6px_0px_0px_rgba(147,231,79,1)] active:translate-y-1 active:shadow-none transition-all"
+                        >
+                          Відкрити посилання <ExternalLink size={20} />
+                        </a>
+                      </div>
+                   </div>
                 ) : (
-                   <div className="p-8 text-black font-bold whitespace-pre-wrap">{selectedItem.content}</div>
+                   <div className="text-black font-bold whitespace-pre-wrap leading-relaxed">{selectedItem.content}</div>
                 )}
              </div>
           </div>
         ) : (
-          <div className="flex-1 flex items-center justify-center opacity-40 text-black font-black uppercase text-sm">Оберіть квиток</div>
+          <div className="flex-1 flex items-center justify-center opacity-40 text-black font-black uppercase text-sm">Оберіть запис</div>
         )}
       </div>
 
@@ -216,7 +227,7 @@ const TransportTab = ({ trip }) => {
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4 text-black">
           <div className="bg-white border-4 border-black rounded-3xl p-8 max-w-lg w-full relative shadow-[12px_12px_0px_0px_rgba(0,0,0,1)]">
             <button onClick={() => setIsModalOpen(false)} className="absolute top-6 right-6 text-gray-500 hover:text-black"><X size={24} /></button>
-            <h2 className="text-2xl font-black uppercase italic mb-6 text-black">{isEditing ? "Редагувати транспорт" : "Додати квиток"}</h2>
+            <h2 className="text-2xl font-black uppercase italic mb-6"> {isEditing ? "Редагувати" : "Додати квиток"}</h2>
             
             {!isEditing && (
                <div className="flex gap-2 mb-6 bg-gray-100 p-1.5 rounded-2xl border-2 border-black">
@@ -229,19 +240,19 @@ const TransportTab = ({ trip }) => {
             )}
 
             <div className="space-y-4 mb-8">
-               <input type="text" value={formData.title} onChange={(e) => setFormData({...formData, title: e.target.value})} className="w-full p-4 border-2 border-black rounded-xl font-bold bg-gray-50 text-black" placeholder="Назва (напр. Потяг до Варшави)" />
+               <input type="text" value={formData.title} onChange={(e) => setFormData({...formData, title: e.target.value})} className="w-full p-4 border-2 border-black rounded-xl font-bold bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#93E74F] text-black" placeholder="Назва (напр. Потяг до Варшави)" />
                {activeTab === 'file' ? (
-                  <div onClick={() => fileInputRef.current.click()} className="border-4 border-dashed border-gray-300 rounded-xl p-8 text-center cursor-pointer bg-gray-50 hover:border-black">
-                     <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept=".pdf,.jpg,.png" />
-                     <p className="font-black text-xs uppercase text-black">{formData.content || "Оберіть файл квитка"}</p>
+                  <div onClick={() => fileInputRef.current.click()} className="border-4 border-dashed border-gray-300 rounded-xl p-8 text-center cursor-pointer bg-gray-50 hover:border-black transition-colors">
+                      <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept=".pdf,.jpg,.png" />
+                      <p className="font-black text-xs uppercase text-black">{selectedFile ? selectedFile.name : (formData.content || "Оберіть файл")}</p>
                   </div>
                ) : (
-                  <textarea rows="4" value={formData.content} onChange={(e) => setFormData({...formData, content: e.target.value})} className="w-full p-4 border-2 border-black rounded-xl font-bold bg-gray-50 resize-none text-black" placeholder={activeTab === 'link' ? "Вставте посилання..." : "Деталі маршруту, номер місця..."} />
+                  <textarea rows="4" value={formData.content} onChange={(e) => setFormData({...formData, content: e.target.value})} className="w-full p-4 border-2 border-black rounded-xl font-bold bg-gray-50 resize-none focus:outline-none focus:ring-2 focus:ring-[#93E74F] text-black" placeholder={activeTab === 'link' ? "Вставте посилання..." : "Деталі..."} />
                )}
             </div>
 
-            <button onClick={handleSubmit} className="w-full py-4 bg-[#93E74F] text-black border-4 border-black rounded-xl font-black uppercase shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] active:translate-y-1 active:shadow-none transition-all">
-               {isEditing ? "Оновити дані" : "Зберегти"}
+            <button onClick={handleSubmit} className="w-full py-4 bg-[#93E74F] text-black border-4 border-black rounded-xl font-black uppercase shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] active:translate-y-1 transition-all">
+               {isEditing ? "Оновити" : "Зберегти"}
             </button>
           </div>
         </div>

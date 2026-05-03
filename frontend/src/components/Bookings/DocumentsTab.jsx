@@ -1,8 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
-import { Plus, Link as LinkIcon, FileText, AlignLeft, X, Download, Trash2, Pencil, Image as ImageIcon } from 'lucide-react';
+import { Plus, FileText, X, Download, Trash2, Pencil, Image as ImageIcon } from 'lucide-react';
 
 const DocumentsTab = ({ trip }) => {
+  // 1. Отримуємо ім'я користувача і чистимо його від лапок і пробілів
+  const currentUserName = (localStorage.getItem('userName') || localStorage.getItem('user_name') || '')
+    .replace(/['"]+/g, '')
+    .trim();
+
   const [items, setItems] = useState([]);
   const [selectedItem, setSelectedItem] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -28,46 +33,19 @@ const DocumentsTab = ({ trip }) => {
 
   useEffect(() => {
     if (!trip?.id) return;
-
     const wsUrl = `ws://localhost:8000/ws/${trip.id}`;
     const socket = new WebSocket(wsUrl);
-
-    socket.onopen = () => {
-      console.log(`Підключено до WebSocket (Документи) для подорожі ${trip.id}`);
-    };
-
     socket.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        
-        if (data.action === "refresh_documents") {
-          console.log("Хтось змінив документи! Тихо оновлюємо список...");
-          fetchDocuments(); 
-        }
+        if (data.action === "refresh_documents") fetchDocuments();
       } catch (error) {
-        console.error("Помилка обробки повідомлення WebSocket:", error);
+        console.error("WS error:", error);
       }
     };
-
-    socket.onclose = () => {
-      console.log("Відключено від WebSocket (Документи)");
-    };
-
-    return () => {
-      socket.close();
-    };
+    return () => socket.close();
   }, [trip?.id]);
 
-  useEffect(() => {
-    if (selectedItem) {
-      const itemStillExists = items.some(item => item.id === selectedItem.id);
-      
-      if (!itemStillExists) {
-        setSelectedItem(null);
-      }
-    }
-  }, [items, selectedItem]);
-  
   const handleSubmit = async () => {
     if (!formData.title) return;
 
@@ -75,7 +53,7 @@ const DocumentsTab = ({ trip }) => {
       try {
         const response = await axios.patch(`http://localhost:8000/documents/${selectedItem.id}`, {
           title: formData.title,
-          content: formData.content, 
+          content: formData.content,
           category: 'docs',
           item_type: 'file'
         });
@@ -83,35 +61,27 @@ const DocumentsTab = ({ trip }) => {
         setSelectedItem(response.data);
         setIsModalOpen(false);
         resetForm();
-      } catch (error) {
-        console.error(error);
-      }
+      } catch (error) { console.error(error); }
     } else {
-      if (!selectedFile) {
-        alert("Будь ласка, оберіть файл!");
-        return;
-      }
-
+      if (!selectedFile) return;
       const data = new FormData();
       data.append('category', 'docs');
       data.append('title', formData.title);
-      data.append('item_type', 'file'); 
+      data.append('item_type', 'file');
       data.append('file', selectedFile);
+      // ПЕРЕДАЄМО АВТОРА НА БЕКЕНД
+      data.append('author_name', currentUserName);
 
       try {
         const response = await axios.post(
-          `http://localhost:8000/trips/${trip.id}/documents`, 
+          `http://localhost:8000/trips/${trip.id}/documents`,
           data,
           { headers: { 'Content-Type': 'multipart/form-data' } }
         );
-    
         setItems([response.data, ...items]);
-        setSelectedItem(response.data);
         setIsModalOpen(false);
         resetForm();
-      } catch (error) {
-        console.error(error);
-      }
+      } catch (error) { console.error(error); }
     }
   };
 
@@ -119,10 +89,15 @@ const DocumentsTab = ({ trip }) => {
     e.stopPropagation();
     if (!window.confirm("Видалити цей документ?")) return;
     try {
-      await axios.delete(`http://localhost:8000/documents/${id}`);
+      // Передаємо user_name в параметрах для перевірки на бекенді
+      await axios.delete(`http://localhost:8000/documents/${id}`, {
+        params: { user_name: currentUserName }
+      });
       setItems(items.filter(item => item.id !== id));
       if (selectedItem?.id === id) setSelectedItem(null);
-    } catch (err) { console.error(err); }
+    } catch (err) { 
+      alert(err.response?.data?.detail || "Помилка видалення");
+    }
   };
 
   const resetForm = () => {
@@ -149,38 +124,49 @@ const DocumentsTab = ({ trip }) => {
   return (
     <div className="flex-1 flex w-full gap-6 font-sans text-black pb-4 pr-3 min-h-0">
       <div className="w-1/2 flex flex-col bg-white border-4 border-black rounded-3xl shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden">
-        <div className="p-6 border-b-4 border-black flex justify-between items-center bg-gray-50">
-          <h2 className="font-black text-xl uppercase tracking-widest flex items-center gap-2 text-black">
-            📄 Документи
-          </h2>
-          <span className="bg-[#93E74F] text-black text-[10px] px-2 py-1 rounded-lg font-black border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] text-black">
+        <div className="p-6 border-b-4 border-black flex justify-between items-center bg-gray-50 text-black">
+          <h2 className="font-black text-xl uppercase tracking-widest flex items-center gap-2">📄 Документи</h2>
+          <span className="bg-[#93E74F] text-[10px] px-2 py-1 rounded-lg font-black border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
             {items.length} ЗАПИСІВ
           </span>
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 bg-white flex flex-col gap-4">
-          {items.map(item => (
-            <button
-              key={item.id}
-              onClick={() => setSelectedItem(item)}
-              className={`group relative w-full text-left p-4 rounded-2xl border-2 transition-all flex items-center gap-4 ${
-                selectedItem?.id === item.id 
-                  ? 'bg-[#93E74F]/10 border-[#93E74F] shadow-[4px_4px_0px_0px_rgba(147,231,79,1)] translate-x-1' 
-                  : 'bg-white border-black hover:bg-gray-50 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]'
-              }`}
-            >
-              <div onClick={(e) => handleDelete(e, item.id)} className="absolute -top-2 -left-2 w-7 h-7 bg-white border-2 border-black rounded-full flex items-center justify-center text-red-500 opacity-0 group-hover:opacity-100 transition-all shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] z-10">
-                <Trash2 size={12} />
-              </div>
-              <div className={`w-10 h-10 rounded-xl flex items-center justify-center border-2 border-black ${selectedItem?.id === item.id ? 'bg-[#93E74F]' : 'bg-gray-100'}`}>
-                {renderIcon(item.content)}
-              </div>
-              <div className="flex-1 overflow-hidden text-black">
-                <h4 className="font-black text-sm uppercase truncate">{item.title}</h4>
-                <p className="text-[10px] font-bold text-gray-500 uppercase mt-1">Документ</p>
-              </div>
-            </button>
-          ))}
+          {items.map(item => {
+            // ПЕРЕВІРКА: чи ти автор АБО гід подорожі?
+            const isAuthor = item.author_name === currentUserName;
+            const isGuide = trip?.guide_name === currentUserName;
+            const canDelete = isAuthor || isGuide;
+
+            return (
+              <button
+                key={item.id}
+                onClick={() => setSelectedItem(item)}
+                className={`group relative w-full text-left p-4 rounded-2xl border-2 transition-all flex items-center gap-4 ${
+                  selectedItem?.id === item.id 
+                    ? 'bg-[#93E74F]/10 border-[#93E74F] shadow-[4px_4px_0px_0px_rgba(147,231,79,1)] translate-x-1' 
+                    : 'bg-white border-black hover:bg-gray-50 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]'
+                }`}
+              >
+                {/* Кошик показуємо тільки якщо ти автор або гід */}
+                {canDelete && (
+                  <div 
+                    onClick={(e) => handleDelete(e, item.id)} 
+                    className="absolute -top-2 -left-2 w-7 h-7 bg-white border-2 border-black rounded-full flex items-center justify-center text-red-500 opacity-0 group-hover:opacity-100 transition-all shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] z-10"
+                  >
+                    <Trash2 size={12} />
+                  </div>
+                )}
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center border-2 border-black ${selectedItem?.id === item.id ? 'bg-[#93E74F]' : 'bg-gray-100'}`}>
+                  {renderIcon(item.content)}
+                </div>
+                <div className="flex-1 overflow-hidden text-black">
+                  <h4 className="font-black text-sm uppercase truncate">{item.title}</h4>
+                  <p className="text-[9px] font-bold text-gray-400 uppercase mt-1">Додано: {item.author_name || 'Гість'}</p>
+                </div>
+              </button>
+            );
+          })}
         </div>
 
         <div className="p-6 border-t-4 border-black bg-white">
@@ -199,50 +185,49 @@ const DocumentsTab = ({ trip }) => {
              <div className="p-6 border-b-4 border-black flex items-center justify-between bg-[#93E74F]/20">
                 <h2 className="text-xl font-black uppercase truncate text-black">{selectedItem.title}</h2>
                 <div className="flex gap-2">
-                   <button onClick={() => { setFormData({title: selectedItem.title, content: selectedItem.content}); setIsEditing(true); setIsModalOpen(true); }} className="p-2 border-2 border-black rounded-lg hover:bg-[#93E74F] transition-colors text-black"><Pencil size={16}/></button>
+                   {(selectedItem.author_name === currentUserName || trip?.guide_name === currentUserName) && (
+                     <button onClick={() => { setFormData({title: selectedItem.title, content: selectedItem.content}); setIsEditing(true); setIsModalOpen(true); }} className="p-2 border-2 border-black rounded-lg hover:bg-[#93E74F] transition-colors text-black"><Pencil size={16}/></button>
+                   )}
                    <a href={getFileUrl(selectedItem.content)} download className="p-2 border-2 border-black rounded-lg bg-black text-[#93E74F]"><Download size={16}/></a>
                 </div>
              </div>
-             <div className="flex-1 overflow-hidden bg-white">
+             <div className="flex-1 overflow-hidden bg-white text-black">
                 {selectedItem.content?.toLowerCase().endsWith('.pdf') ? 
-                   <iframe src={getFileUrl(selectedItem.content)} className="w-full h-full border-none" /> : 
-                   <div className="p-4 flex justify-center h-full items-center bg-gray-100"><img src={getFileUrl(selectedItem.content)} className="max-h-full border-4 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]" /></div>
+                   <iframe src={getFileUrl(selectedItem.content)} className="w-full h-full border-none" title="pdf-viewer" /> : 
+                   <div className="p-4 flex justify-center h-full items-center bg-gray-100"><img src={getFileUrl(selectedItem.content)} alt="preview" className="max-h-full border-4 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]" /></div>
                 }
              </div>
           </div>
         ) : (
-          <div className="flex-1 flex items-center justify-center opacity-40 text-black font-black uppercase text-sm">Оберіть документ</div>
+          <div className="flex-1 flex items-center justify-center opacity-40 font-black uppercase text-sm text-black">Оберіть документ</div>
         )}
       </div>
 
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4 text-black">
-          <div className="bg-white border-4 border-black rounded-3xl p-8 max-w-lg w-full relative shadow-[12px_12px_0px_0px_rgba(0,0,0,1)]">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-white border-4 border-black rounded-3xl p-8 max-w-lg w-full relative shadow-[12px_12px_0px_0px_rgba(0,0,0,1)] text-black">
             <button onClick={() => setIsModalOpen(false)} className="absolute top-6 right-6 text-gray-500 hover:text-black"><X size={24} /></button>
-            <h2 className="text-2xl font-black uppercase italic mb-6 text-black">{isEditing ? "Редагувати документ" : "Додати документ"}</h2>
-            
-            <div className="space-y-4 mb-8">
+            <h2 className="text-2xl font-black uppercase italic mb-6"> {isEditing ? "Редагувати документ" : "Додати документ"}</h2>
+            <div className="space-y-4 mb-8 text-black">
                <input 
                  type="text" 
                  value={formData.title} 
                  onChange={(e) => setFormData({...formData, title: e.target.value})} 
-                 className="w-full p-4 border-2 border-black rounded-xl font-bold bg-gray-50 text-black focus:outline-none focus:ring-2 focus:ring-[#93E74F]" 
-                 placeholder="Назва (напр. Скан паспорта)" 
+                 className="w-full p-4 border-2 border-black rounded-xl font-bold bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#93E74F] text-black" 
+                 placeholder="Назва" 
                />
-               
                {!isEditing && (
-                  <div onClick={() => fileInputRef.current.click()} className="border-4 border-dashed border-gray-300 rounded-xl p-8 text-center cursor-pointer bg-gray-50 hover:border-black transition-colors">
-                     <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept=".pdf,.jpg,.png" />
-                     <FileText size={32} className={`mx-auto mb-2 ${selectedFile ? 'text-[#93E74F]' : 'text-gray-400'}`} />
-                     <p className="font-black text-xs uppercase text-black">{selectedFile ? selectedFile.name : "Оберіть файл документа"}</p>
+                  <div onClick={() => fileInputRef.current.click()} className="border-4 border-dashed border-gray-300 rounded-xl p-8 text-center cursor-pointer bg-gray-50 hover:border-black transition-colors text-black">
+                      <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept=".pdf,.jpg,.png" />
+                      <FileText size={32} className={`mx-auto mb-2 ${selectedFile ? 'text-[#93E74F]' : 'text-gray-400'}`} />
+                      <p className="font-black text-xs uppercase text-black">{selectedFile ? selectedFile.name : "Оберіть файл"}</p>
                   </div>
                )}
             </div>
-
             <button 
               onClick={handleSubmit} 
               disabled={!formData.title || (!isEditing && !selectedFile)}
-              className="w-full py-4 bg-[#93E74F] text-black border-4 border-black rounded-xl font-black uppercase shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] active:translate-y-1 active:shadow-none transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full py-4 bg-[#93E74F] text-black border-4 border-black rounded-xl font-black uppercase shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] active:translate-y-1 active:shadow-none transition-all disabled:opacity-50"
             >
                {isEditing ? "Оновити назву" : "Зберегти"}
             </button>
