@@ -205,16 +205,14 @@ const TripHeader = ({
             </button>
           )}
 
-          {!isCreator && (
-            <button 
-              onClick={handleLeaveClick}
-              disabled={isLoading}
-              className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white hover:bg-red-600 border-2 border-black rounded-xl font-black text-xs uppercase shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 active:shadow-none transition-all disabled:opacity-50"
-              title="Покинути подорож"
-            >
-              🚪 Вийти
-            </button>
-          )}
+          <button 
+            onClick={handleLeaveClick}
+            disabled={isLoading}
+            className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white hover:bg-red-600 border-2 border-black rounded-xl font-black text-xs uppercase shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 active:shadow-none transition-all disabled:opacity-50"
+            title="Покинути подорож"
+          >
+            🚪 Вийти
+          </button>
 
           <div className="w-10 h-10 rounded-full border-2 border-black bg-[#93E74F] flex items-center justify-center font-bold text-xs uppercase shadow-sm">
             {currentUserName?.charAt(0)}

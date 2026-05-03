@@ -1,4 +1,5 @@
 import json
+from random import random
 from fastapi import FastAPI, Depends, HTTPException, File, UploadFile, Response, Form, status, BackgroundTasks
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -778,7 +779,6 @@ def respond_to_invitation(
     db.commit()
     return {"message": f"Запрошення успішно оновлено: {response.action}"}
 
-
 class LeaveTripRequest(BaseModel):
     email: str
     trip_id: int
@@ -795,12 +795,33 @@ def leave_trip(req: LeaveTripRequest, db: Session = Depends(database.get_db)):
             user_to_remove = p
             break
     
-    if user_to_remove:
-        trip.participants.remove(user_to_remove)
-        db.commit()
-        return {"message": "Успішно вийшли з подорожі"}
-    
-    return {"message": "Вас і так немає в цій подорожі"}
+    if not user_to_remove:
+        return {"message": "Вас і так немає в цій подорожі"}
+    user_name = user_to_remove.first_name
+
+    trip.participants.remove(user_to_remove)
+
+    if trip.guide_name == user_name:
+        trip.guide_name = None
+
+    if trip.creator and trip.creator.email == req.email:
+        if len(trip.participants) == 0:
+            db.delete(trip)
+            db.commit()
+            return {"message": "Ви були останнім учасником. Подорож видалено."}
+        else:
+            new_owner = None
+            
+            if trip.guide_name:
+                new_owner = next((p for p in trip.participants if p.first_name == trip.guide_name), None)
+            
+            if not new_owner:
+                new_owner = random.choice(trip.participants)
+            
+            trip.creator_id = new_owner.id
+
+    db.commit()
+    return {"message": "Успішно вийшли з подорожі"}
 
 if __name__ == "__main__":
     import uvicorn
