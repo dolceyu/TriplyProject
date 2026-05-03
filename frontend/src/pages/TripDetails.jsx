@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowLeft, MapPin, Plus, Calendar, Clock, X, AlertCircle } from 'lucide-react';
-import { MapContainer, TileLayer, Marker, Popup, useMap, Polyline } from 'react-leaflet';
+import { MapContainer, TileLayer, useMap, Polyline } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import axios from 'axios';
@@ -10,6 +10,7 @@ import AddLocationModal from '../components/Trip/AddLocationModal';
 import TripHeader from '../components/Trip/TripHeader';
 import ItineraryPanel from '../components/Trip/ItineraryPanel';
 import LocationsPanel from '../components/Trip/LocationsPanel'; 
+import CustomMapMarker from '../components/Trip/CustomMapMarker'; 
 
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -341,19 +342,20 @@ const TripDetails = ({ trip, onBack }) => {
             <TileLayer url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png" attribution='&copy; CARTO' />
             <MapUpdater center={mapCenter} />
             {routeData.length > 0 && <Polyline positions={routeData} color="#000" weight={5} opacity={0.8} lineJoin="round" />}
+            
             {locations.map((loc) => {
               const isInDay = itineraryItems.some(i => i.title === loc.name && i.day_number === activeDayOnMap);
               const opacity = activeDayOnMap && !isInDay ? 0.3 : 1;
 
               return (
-                <Marker key={loc.id} position={[loc.lat, loc.lng]} opacity={opacity}>
-                  <Popup className="font-bold text-black uppercase italic">
-                    <span className="block font-black">{loc.name}</span>
-                    <span className="block text-[10px] text-gray-500">{loc.status === 'approved' ? '✅ В маршруті' : '⌛ Голосування'}</span>
-                  </Popup>
-                </Marker>
+                <CustomMapMarker 
+                  key={loc.id} 
+                  loc={loc} 
+                  opacity={opacity} 
+                />
               );
             })}
+            
           </MapContainer>
         </div>
 
