@@ -10,7 +10,7 @@ const categories = [
   { id: 'fun', icon: '🎉', label: 'Розваги', value: 'нічне життя, атракціони' },
 ];
 
-const AIPanel = ({ tripId, onAddFromAI }) => {
+const AIPanel = ({ tripId, onAddFromAI, destination }) => { // ДОДАВ destination В ПРОПСИ
   const [recommendations, setRecommendations] = useState(() => {
     const saved = localStorage.getItem(`ai_recs_dict_${tripId}`);
     return saved ? JSON.parse(saved) : { culture: [], food: [], nature: [], fun: [] };
@@ -68,20 +68,41 @@ const AIPanel = ({ tripId, onAddFromAI }) => {
   };
 
   const handleSuggest = async (place) => {
+    const toastId = toast.loading('Шукаємо локацію на карті...', { style: { background: '#333', color: '#fff' }});
+    
     try {
+      let lat = null;
+      let lng = null;
+      const smartQuery = `${place.title}, ${destination || ''}`;
+      
+      try {
+        const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(smartQuery)}&limit=1&accept-language=uk`);
+        const data = await response.json();
+        
+        if (data && data.length > 0) {
+          lat = parseFloat(data[0].lat);
+          lng = parseFloat(data[0].lon); 
+        }
+      } catch (geoError) {
+        console.error("Geocoding error:", geoError);
+      }
+
       await onAddFromAI({
         name: place.title,
         description: place.description,
-        type: place.category
+        type: place.category,
+        lat: lat, 
+        lng: lng  
       });
-      toast.success(`"${place.title}" додано!`, { style: { background: '#333', color: '#fff' } });
+      
+      toast.success(`"${place.title}" додано на карту!`, { id: toastId, style: { background: '#333', color: '#fff' } });
       
       setRecommendations(prev => ({
         ...prev,
         [activeCat]: prev[activeCat].filter(p => p.title !== place.title)
       }));
     } catch (error) {
-      toast.error("Помилка при додаванні.");
+      toast.error("Помилка при додаванні.", { id: toastId });
     }
   };
 

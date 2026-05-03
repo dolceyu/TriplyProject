@@ -4,6 +4,7 @@ import { MapContainer, TileLayer, Marker, Popup, useMap, Polyline } from 'react-
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import axios from 'axios';
+import toast from 'react-hot-toast';
 import AddLocationModal from '../components/Trip/AddLocationModal';
 
 import TripHeader from '../components/Trip/TripHeader';
@@ -175,7 +176,7 @@ const TripDetails = ({ trip, onBack }) => {
     };
     try {
       const response = await axios.post(`http://localhost:8000/trips/${trip.id}/locations`, newLocData);
-      setLocations([...locations, response.data]);
+      setLocations(prev => [...prev, response.data]);
       setMapCenter([response.data.lat, response.data.lng]);
       setIsAddModalOpen(false);
     } catch (error) { console.error(error); }
@@ -183,16 +184,15 @@ const TripDetails = ({ trip, onBack }) => {
 
   const handleAddFromAI = async (aiPlace) => {
     try {
-      const query = `${aiPlace.name}, ${trip.destination}`;
-      const geoRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`);
-      const geoData = await geoRes.json();
+      console.log("1. Починаємо додавати ШІ локацію:", aiPlace);
       
-      let lat = mapCenter[0];
-      let lng = mapCenter[1];
+      let lat = parseFloat(aiPlace.lat);
+      let lng = parseFloat(aiPlace.lng);
       
-      if (geoData && geoData.length > 0) {
-        lat = parseFloat(geoData[0].lat);
-        lng = parseFloat(geoData[0].lon);
+      if (!lat || !lng || isNaN(lat) || isNaN(lng)) {
+         console.warn("Координати не знайдені, ставимо дефолтні");
+         lat = mapCenter[0];
+         lng = mapCenter[1];
       }
       
       const newLocData = {
@@ -203,12 +203,19 @@ const TripDetails = ({ trip, onBack }) => {
         author_name: 'ШІ (' + currentUserName + ')' 
       };
 
+      console.log("2. Відправляємо на бекенд:", newLocData);
       const response = await axios.post(`http://localhost:8000/trips/${trip.id}/locations`, newLocData);
-      setLocations([...locations, response.data]); 
+      
+      console.log("3. Збережено успішно:", response.data);
+      setLocations(prev => [...prev, response.data]); 
+      
+      if (response.data.lat && response.data.lng && !isNaN(response.data.lat)) {
+        setMapCenter([parseFloat(response.data.lat), parseFloat(response.data.lng)]);
+      }
       
     } catch (error) {
       console.error("Помилка при додаванні ШІ-локації:", error);
-      throw error; 
+      toast.error("Не вдалося додати локацію");
     }
   };
   
@@ -351,6 +358,7 @@ const TripDetails = ({ trip, onBack }) => {
         </div>
 
         <ItineraryPanel 
+          trip={trip}
           tripId={trip.id}
           sidebarTab={sidebarTab} 
           setSidebarTab={setSidebarTab} 

@@ -24,7 +24,7 @@ const calculateLogistics = (lat1, lon1, lat2, lon2) => {
 const ItineraryPanel = ({ 
   sidebarTab, setSidebarTab, tripId, itineraryItems = [], locations = [], 
   onDelete, setActiveDayOnMap, activeDayOnMap, onGenerateSmartItinerary,
-  onAddFromAI 
+  onAddFromAI, trip 
 }) => {
   const items = Array.isArray(itineraryItems) ? itineraryItems : [];
   const grouped = items.reduce((acc, item) => {
@@ -83,6 +83,7 @@ const ItineraryPanel = ({
           <AIPanel 
             tripId={tripId} 
             onAddFromAI={onAddFromAI} 
+            destination={trip.destination}
           /> 
         )}
 
