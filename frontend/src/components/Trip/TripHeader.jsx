@@ -175,11 +175,23 @@ const TripHeader = ({
           </button>
 
           {!guideName ? (
-            <button onClick={handleBecomeGuide} disabled={isLoading} className="px-4 py-2 bg-white border-2 border-black rounded-xl font-black text-xs uppercase shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:bg-[#93E74F]">
+            <button 
+              onClick={handleBecomeGuide} 
+              disabled={isLoading} 
+              className="px-4 py-2 bg-white border-2 border-black rounded-xl font-black text-xs uppercase shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:bg-[#93E74F] active:translate-y-0.5 active:shadow-none transition-all"
+            >
               Стати Гідом
             </button>
           ) : (
-            <div onClick={handleResignGuide} className="px-4 py-2 bg-[#93E74F] border-2 border-black rounded-xl font-black text-xs uppercase shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] cursor-pointer">
+            <div 
+              onClick={guideName === currentUserName ? handleResignGuide : undefined} 
+              className={`px-4 py-2 border-2 border-black rounded-xl font-black text-xs uppercase shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all ${
+                guideName === currentUserName 
+                  ? 'bg-[#93E74F] cursor-pointer hover:bg-red-400 hover:text-white active:translate-y-0.5 active:shadow-none' 
+                  : 'bg-gray-100 text-gray-500 cursor-default'
+              }`}
+              title={guideName === currentUserName ? "Натисніть, щоб відмовитись від ролі гіда" : `Гід цієї подорожі: ${guideName}`}
+            >
               Гід: {guideName === currentUserName ? "Ти" : guideName}
             </div>
           )}
