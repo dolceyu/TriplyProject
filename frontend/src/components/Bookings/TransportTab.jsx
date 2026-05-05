@@ -161,7 +161,7 @@ const TransportTab = ({ trip }) => {
                 </div>
                 <div className="flex-1 overflow-hidden">
                   <h4 className="font-black text-sm uppercase truncate">{item.title}</h4>
-                  <p className="text-[9px] font-bold text-gray-400 uppercase mt-1">Додав: {item.author_name || 'Гість'}</p>
+                  <p className="text-[9px] font-bold text-gray-400 uppercase mt-1">Додано: {item.author_name || 'Гість'}</p>
                 </div>
               </button>
             );

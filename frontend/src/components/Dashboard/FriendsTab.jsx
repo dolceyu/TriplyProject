@@ -253,7 +253,7 @@ const FriendsTab = ({ onRequestAccepted }) => {
               ) : (
                 <div className="text-center py-16 flex flex-col items-center gap-4">
                   <span className="text-6xl grayscale">🏝️</span>
-                  <p className="text-gray-400 font-black text-xl max-w-xs leading-snug">Тут поки порожньо... Знайди когось для спільної подорожі!</p>
+                  <p className="text-gray-400 font-black text-xl max-w-xs leading-snug">Тут поки порожньо... Знайдіть когось для спільної подорожі!</p>
                 </div>
               )}
             </div>
