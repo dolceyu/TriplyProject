@@ -526,34 +526,46 @@ def generate_smart_itinerary(trip_id: int, background_tasks: BackgroundTasks, db
     if n_locs < 2:
         raise HTTPException(status_code=400, detail="Потрібно хоча б 2 затверджені локації")
 
-    raw_clusters = compact_clustering(approved_locations, r_preference=2.0)
     dist_matrix = build_distance_matrix(approved_locations)
 
-    if n_locs <= total_days_allowed:
-        balanced_clusters = [[i] for i in range(n_locs)]
-    else:
-        anchors = [0] 
-        while len(anchors) < total_days_allowed:
-            furthest_idx = -1
-            max_dist = -1
-            for i in range(n_locs):
-                if i in anchors: continue
-                min_dist_to_anchors = min([dist_matrix[i][a] for a in anchors])
-                if min_dist_to_anchors > max_dist:
-                    max_dist = min_dist_to_anchors
-                    furthest_idx = i
-            anchors.append(furthest_idx)
+    raw_clusters = compact_clustering(approved_locations, r_preference=2.0)
 
-        balanced_clusters = [[] for _ in range(total_days_allowed)]
+    anchors = []
+    
+    sorted_raw_clusters = sorted(raw_clusters, key=len, reverse=True) if raw_clusters else []
+    for cluster in sorted_raw_clusters:
+        if len(anchors) < total_days_allowed and cluster:
+            anchors.append(cluster[0]) 
+
+    while len(anchors) < total_days_allowed and len(anchors) < n_locs:
+        best_p, max_d = -1, -1
         for i in range(n_locs):
-            closest_day = 0
-            min_d = float('inf')
-            for day_idx, anchor_idx in enumerate(anchors):
-                d = dist_matrix[i][anchor_idx]
-                if d < min_d:
-                    min_d = d
-                    closest_day = day_idx
-            balanced_clusters[closest_day].append(i)
+            if i in anchors: continue
+            d = min(dist_matrix[i][a] for a in anchors)
+            if d > max_d:
+                max_d, best_p = d, i
+        anchors.append(best_p)
+
+    balanced_clusters = [[] for _ in range(total_days_allowed)]
+    max_points_per_day = (n_locs // total_days_allowed) + 1
+
+    assignments = []
+    for i in range(n_locs):
+        for day_idx, a in enumerate(anchors):
+            assignments.append((i, day_idx, dist_matrix[i][a]))
+
+    assignments.sort(key=lambda x: x[2])
+
+    assigned_points = set()
+    for point, day_idx, dist in assignments:
+        if point not in assigned_points and len(balanced_clusters[day_idx]) < max_points_per_day:
+            balanced_clusters[day_idx].append(point)
+            assigned_points.add(point)
+
+    for i in range(n_locs):
+        if i not in assigned_points:
+            emptiest_day = min(range(total_days_allowed), key=lambda d: len(balanced_clusters[d]))
+            balanced_clusters[emptiest_day].append(i)
 
     final_daily_routes = []
     for cluster in balanced_clusters:
@@ -571,6 +583,19 @@ def generate_smart_itinerary(trip_id: int, background_tasks: BackgroundTasks, db
             unvisited.remove(next_point)
             current = next_point
             
+        improved = True
+        while improved:
+            improved = False
+            for i in range(1, len(route) - 1):
+                for j in range(i + 1, len(route)):
+                    new_route = route[:i] + route[i:j][::-1] + route[j:]
+                    old_dist = sum(dist_matrix[route[k]][route[k+1]] for k in range(len(route)-1))
+                    new_dist = sum(dist_matrix[new_route[k]][new_route[k+1]] for k in range(len(new_route)-1))
+                    
+                    if new_dist < old_dist:
+                        route = new_route
+                        improved = True
+                        
         final_daily_routes.append(route)
 
     db.query(models.ItineraryItem).filter(
