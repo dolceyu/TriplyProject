@@ -1,14 +1,19 @@
 import json
+import os
 import traceback
 import requests
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from database import get_db
 import models
+from dotenv import load_dotenv
+
+# Завантажуємо всі змінні з файлу .env у пам'ять
+load_dotenv()
 
 router = APIRouter(tags=["AI Recommendations"])
 
-API_KEY = "AIzaSyDJFnik2hPuYPZecBVTq8v1K4w3OybRf2E"
+API_KEY = os.getenv("GEMINI_API_KEY")
 
 @router.get("/trips/{trip_id}/ai-recommendations")
 def get_ai_recommendations(

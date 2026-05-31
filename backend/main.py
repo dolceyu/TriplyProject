@@ -91,7 +91,7 @@ def register(user: UserCreate, db: Session = Depends(database.get_db)):
 def login(user: UserLogin, db: Session = Depends(database.get_db)):
     db_user = db.query(models.User).filter(models.User.email == user.email).first()
     if not db_user or not pwd_context.verify(user.password, db_user.password):
-        raise HTTPException(status_code=400, detail="Невірний email або пароль")
+        raise HTTPException(status_code=400, detail="Неправильний email або пароль")
     
     return {
         "status": "success", 
@@ -425,7 +425,7 @@ def join_trip(data: JoinTripRequest, db: Session = Depends(database.get_db)):
 def change_password(data: PasswordChange, db: Session = Depends(database.get_db)):
     user = db.query(models.User).filter(models.User.email == data.email).first()
     if not user or not pwd_context.verify(data.old_password, user.password):
-        raise HTTPException(status_code=400, detail="Старий пароль невірний")
+        raise HTTPException(status_code=400, detail="Старий пароль неправильний")
     
     user.password = pwd_context.hash(data.new_password)
     db.commit()
@@ -435,7 +435,7 @@ def change_password(data: PasswordChange, db: Session = Depends(database.get_db)
 def delete_account(data: DeleteAccount, db: Session = Depends(database.get_db)):
     user = db.query(models.User).filter(models.User.email == data.email).first()
     if not user or not pwd_context.verify(data.password, user.password):
-        raise HTTPException(status_code=400, detail="Пароль невірний")
+        raise HTTPException(status_code=400, detail="Пароль неправильний")
     
     db.delete(user)
     db.commit()
